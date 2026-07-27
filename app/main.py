@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.api.v1 import admin, auth, cases, sightings
 from app.core.config import settings
 from app.db.session import engine
 
@@ -24,14 +25,24 @@ app.add_middleware(
 
 
 @app.get("/health", tags=["system"])
-def health_check() -> dict:
-    """Basic liveness check + DB connectivity check."""
+def health_check(response: Response) -> dict:
+    """Basic liveness check + DB connectivity check.
+
+    Returns HTTP 503 (not 200) when the database is unreachable — a 200 here
+    used to be returned even on failure, which silently masked real
+    connectivity problems. If you see 503 with "database": "unreachable",
+    check DATABASE_URL in .env — inside Docker it must point at the service
+    name "db", not "localhost". See README.md "Understanding the connections".
+    """
     db_ok = True
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
     except Exception:
         db_ok = False
+
+    if not db_ok:
+        response.status_code = 503
 
     return {
         "status": "ok" if db_ok else "degraded",
@@ -40,9 +51,12 @@ def health_check() -> dict:
     }
 
 
-# Phase 2 will mount routers here, e.g.:
-# from app.api.v1 import auth, cases, sightings, admin
-# app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-# app.include_router(cases.router, prefix="/api/v1/cases", tags=["cases"])
-# app.include_router(sightings.router, prefix="/api/v1/sightings", tags=["sightings"])
-# app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(cases.router, prefix="/api/v1/cases", tags=["cases"])
+app.include_router(sightings.router, prefix="/api/v1/sightings", tags=["sightings"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+
+# NOTE (Phase 3): none of the routes above enforce role-based access yet —
+# every route that should be authority/admin-only is marked with a
+# `TODO(phase-3)` docstring at its definition. See docs/SECURITY_AND_ACCESS.md
+# for the full RBAC matrix this will enforce.
