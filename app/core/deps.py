@@ -1,5 +1,4 @@
 import uuid
-from collections.abc import Iterable
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -7,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import InvalidTokenError, decode_token
 from app.db.session import get_db
-from app.models.user import User, UserRole
+from app.models.user import User
 
 # tokenUrl points at the login route for OpenAPI docs' "Authorize" button.
 # Login itself uses a JSON body (UserLogin), not form data — see api/v1/auth.py.
