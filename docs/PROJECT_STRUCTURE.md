@@ -27,17 +27,30 @@ missing-persons-network/
 │   │   ├── base_class.py     # shared declarative base (id, created_at, updated_at)
 │   │   ├── base.py            # imports all models for Alembic autogenerate
 │   │   └── session.py         # engine + get_db() dependency
-│   └── tests/                 # (Phase 5) pytest suite
+│   └── tests/                 # pytest suite (transactional isolation, real Postgres+PostGIS+Redis)
+│       ├── conftest.py         # DB/session/client/Redis fixtures
+│       ├── test_auth.py
+│       ├── test_cases.py
+│       ├── test_sightings.py
+│       ├── test_admin.py
+│       └── services/           # lower-level unit tests calling services directly
 ├── alembic/
 │   ├── env.py                 # wired to app settings + models
 │   ├── script.py.mako
 │   └── versions/
-│       └── 0001_initial_schema.py
+│       ├── 0001_initial_schema.py
+│       └── 0002_geo_indexes.py
+├── scripts/
+│   └── init-test-db.sql       # creates the separate test DB on first container init
+├── .github/workflows/ci.yml   # lint + test + coverage on every push/PR
 ├── docs/                      # you are here
 ├── frontend/                  # (Phase 2+) React app
 ├── docker-compose.yml          # Postgres+PostGIS, Redis, API
 ├── Dockerfile
 ├── requirements.txt
+├── requirements-dev.txt        # adds ruff for linting on top of requirements.txt
+├── pytest.ini
+├── pyproject.toml              # ruff config
 ├── .env.example
 └── README.md
 ```

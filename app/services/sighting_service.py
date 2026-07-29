@@ -52,7 +52,10 @@ def list_sightings_for_case(db: Session, case_id: uuid.UUID) -> list[Sighting]:
 def review_sighting(
     db: Session, sighting: Sighting, new_status: SightingStatus, reviewer: User
 ) -> Sighting:
-    # TODO(phase-3): gate this endpoint to verified authority/admin roles via require_role().
+    # Role check (verified authority/admin) happens at the route level via
+    # require_verified_authority_or_admin. No row-level ownership constraint
+    # here by design -- any verified authority can review any pending sighting,
+    # unlike case status changes which are scoped to the assigned authority.
     if new_status == SightingStatus.PENDING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

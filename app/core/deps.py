@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Iterable
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import InvalidTokenError, decode_token
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 
 # tokenUrl points at the login route for OpenAPI docs' "Authorize" button.
 # Login itself uses a JSON body (UserLogin), not form data — see api/v1/auth.py.
@@ -52,7 +53,39 @@ def get_current_user_optional(
         return None
 
 
-# NOTE (Phase 3): role-based gating — require_role(*roles) — and row-level
-# ownership checks (e.g. "only the assigned authority can change this case's
-# status") land here in Phase 3. Endpoints that will need it are marked
-# `# TODO(phase-3)` at their call sites.
+def require_role(*roles: UserRole):
+    """Dependency factory: returns a dependency that 403s unless the current
+    user's role is one of `roles`. Usage: Depends(require_role(UserRole.ADMIN)).
+
+    Stacks on top of get_current_user, so it also 401s if there's no valid
+    token at all — a missing/invalid token and a wrong role are different
+    failure modes and get different status codes.
+    """
+    allowed: Iterable[UserRole] = roles
+
+    def dependency(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This action requires one of these roles: {', '.join(r.value for r in allowed)}",
+            )
+        return current_user
+
+    return dependency
+
+
+def require_verified_authority_or_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Stricter than require_role(AUTHORITY, ADMIN): an authority account that
+    hasn't been approved by an admin yet (is_verified=False) is blocked too.
+    Use this for review/status-change endpoints rather than plain
+    require_role(), since an unverified authority shouldn't act as one yet."""
+    if current_user.role == UserRole.ADMIN:
+        return current_user
+    if current_user.role == UserRole.AUTHORITY and current_user.is_verified:
+        return current_user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="This action requires a verified authority or admin account",
+    )

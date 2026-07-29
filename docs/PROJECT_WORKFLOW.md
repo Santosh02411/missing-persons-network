@@ -8,7 +8,12 @@ This project is being built in five sequential phases:
 |---|---|---|
 | 1 | Architecture & DB schema | ✅ Done |
 | 2 | API endpoint design (routes, request/response models) | ✅ Done |
-| 3 | Auth/RBAC implementation (JWT, role enforcement) | ⏳ Next |
+| 3 | Auth/RBAC implementation (JWT, role enforcement) | ✅ Done |
+| 4 | Geo-search + Redis rate limiting | ✅ Done |
+| 5 | Testing (pytest) + CI/CD (GitHub Actions) | ✅ Done |
+
+All 5 backend phases are now complete. Remaining work is the frontend track
+(see the "Frontend" section of FEATURE_TICKET_LIST.md).
 | 4 | Geo-search + Redis rate limiting | Not started |
 | 5 | Testing (pytest) + CI/CD (GitHub Actions) | Not started |
 

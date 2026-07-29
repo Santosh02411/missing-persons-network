@@ -52,10 +52,20 @@ Full column-level detail lives in `app/models/*.py`; summary:
 - **sightings** — tips against a case; `location` is also geography; `reported_by` nullable for anonymous tips.
 - **audit_logs** — append-only record of sensitive actions (status changes, review decisions).
 
-## Geo-query approach (Phase 4)
+## Geo-query approach (implemented, Phase 4)
 
-Rather than pulling all rows and computing Haversine distance in Python, queries
-use PostGIS directly:
+`services/geo_service.py`'s `nearby_sightings()`/`nearby_cases()` build the
+query via SQLAlchemy (not raw SQL strings), casting the search point to
+`Geography` so PostGIS computes distance in meters and can use the GiST index:
+
+```python
+point = cast(func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326), Geography)
+select(Sighting)
+    .where(func.ST_DWithin(Sighting.location, point, radius_m))
+    .order_by(func.ST_Distance(Sighting.location, point))
+```
+
+This is the SQLAlchemy-expression equivalent of:
 
 ```sql
 SELECT * FROM sightings
@@ -63,11 +73,15 @@ WHERE ST_DWithin(location, ST_MakePoint(:lng, :lat)::geography, :radius_meters)
 ORDER BY location <-> ST_MakePoint(:lng, :lat)::geography;
 ```
 
-This uses the GiST spatial index (added via migration) instead of a full table scan.
+Both use the GiST spatial index added in `alembic/versions/0002_geo_indexes.py`
+instead of a full table scan. `nearby_cases()` additionally filters to
+`CaseStatus.OPEN` — a resolved case showing up in a nearby-search result
+isn't useful to someone searching.
 
-## Rate limiting approach (Phase 4)
+## Rate limiting approach (implemented, Phase 4)
 
-Redis-backed sliding window or token bucket (via `slowapi` or a custom
-`redis.incr` + `EXPIRE` pattern), keyed by IP for anonymous requests and by
-user ID for authenticated ones. Configured per-route (sighting submission
-gets a tighter limit than read endpoints).
+`core/rate_limit.py`'s `sighting_rate_limiter` uses a Redis fixed-window
+counter (`INCR` + `EXPIRE`), keyed by user ID when authenticated or client IP
+otherwise, wired into `POST /api/v1/sightings` as a route dependency. See
+`docs/SECURITY_AND_ACCESS.md` for the tradeoffs of fixed-window vs.
+token-bucket.

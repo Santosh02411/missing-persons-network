@@ -11,10 +11,11 @@ FEATURE_LOG.md when done.
 - [x] TICKET-204: `POST /api/v1/cases` — create case (auth required)
 - [x] TICKET-205: `GET /api/v1/cases` — list/filter open cases (public)
 - [x] TICKET-206: `GET /api/v1/cases/{id}` — case detail (public)
-- [x] TICKET-207: `PATCH /api/v1/cases/{id}` — edit case (owner or assigned authority)
-- [x] TICKET-208 (endpoint built; role gate deferred to Phase 3): `PATCH /api/v1/cases/{id}/status` — status transition (authority only, Phase 3 gate)
+- [x] TICKET-207: `PATCH /api/v1/cases/{id}` — edit case (owner, assigned authority, or admin)
+- [x] TICKET-207b: `POST /api/v1/cases/{id}/claim` (added in Phase 3) — authority claims a case (FR-3)
+- [x] TICKET-208: `PATCH /api/v1/cases/{id}/status` — status transition (assigned authority or admin only)
 - [x] TICKET-209: `POST /api/v1/sightings` — submit sighting (public, anon allowed)
-- [x] TICKET-210 (endpoint built; role gate deferred to Phase 3): `PATCH /api/v1/sightings/{id}/review` — verify/dismiss (authority only, Phase 3 gate)
+- [x] TICKET-210: `PATCH /api/v1/sightings/{id}/review` — verify/dismiss (verified authority or admin only)
 - [x] TICKET-211: `GET /api/v1/admin/authority-requests` — pending authority approvals
 - [x] TICKET-212: `POST /api/v1/admin/authority-requests/{id}/approve`
 - [x] TICKET-213: `case_service.py` — business logic layer for case CRUD + status transitions
@@ -22,32 +23,32 @@ FEATURE_LOG.md when done.
 
 ## Phase 3 — Auth/RBAC
 
-- [ ] TICKET-301: `core/security.py` — JWT encode/decode, password hash/verify
-- [ ] TICKET-302: `core/deps.py` — `get_current_user`, `require_role(*roles)` dependency
-- [ ] TICKET-303: Wire `require_role` into status-change and review endpoints
-- [ ] TICKET-304: Refresh token endpoint + rotation
-- [ ] TICKET-305: Row-level ownership checks (reporter can only edit own case)
-- [ ] TICKET-306: Audit log writes on status change / sighting review
+- [x] TICKET-301: `core/security.py` — JWT encode/decode, password hash/verify
+- [x] TICKET-302: `core/deps.py` — `get_current_user`, `require_role(*roles)` dependency
+- [x] TICKET-303: Wire `require_role` into status-change and review endpoints
+- [x] TICKET-304: Refresh token endpoint + rotation (plus `POST /api/v1/auth/logout`, added beyond original scope since rotation needed a revoke path anyway)
+- [x] TICKET-305: Row-level ownership checks (reporter can only edit own case)
+- [x] TICKET-306: Audit log writes on status change / sighting review
 
 ## Phase 4 — Geo-search & Rate Limiting
 
-- [ ] TICKET-401: `geo_service.py` — `ST_DWithin` query for nearby sightings
-- [ ] TICKET-402: `ST_DWithin` query for nearby open cases
-- [ ] TICKET-403: GiST spatial index migration on `location`/`last_seen_location`
-- [ ] TICKET-404: Redis rate limiter (`slowapi` or custom) on `POST /sightings`
-- [ ] TICKET-405: Redis caching for `GET /cases` list (short TTL, invalidate on write)
-- [ ] TICKET-406: `GET /api/v1/sightings/nearby?lat=&lng=&radius_km=` endpoint
-- [ ] TICKET-407: `GET /api/v1/cases/nearby?lat=&lng=&radius_km=` endpoint
+- [x] TICKET-401: `geo_service.py` — `ST_DWithin` query for nearby sightings
+- [x] TICKET-402: `ST_DWithin` query for nearby open cases
+- [x] TICKET-403: GiST spatial index migration on `location`/`last_seen_location`
+- [x] TICKET-404 (custom Redis limiter, not slowapi): Redis rate limiter (`slowapi` or custom) on `POST /sightings`
+- [x] TICKET-405: Redis caching for `GET /cases` list (short TTL, invalidate on write)
+- [x] TICKET-406: `GET /api/v1/sightings/nearby?lat=&lng=&radius_km=` endpoint
+- [x] TICKET-407: `GET /api/v1/cases/nearby?lat=&lng=&radius_km=` endpoint
 
 ## Phase 5 — Testing & CI/CD
 
-- [ ] TICKET-501: pytest fixtures — test DB (via testcontainers or a dedicated test Postgres), test client
-- [ ] TICKET-502: Unit tests for `case_service.py`, `sighting_service.py`
-- [ ] TICKET-503: Integration tests for auth flow (register/login/refresh)
-- [ ] TICKET-504: Integration tests for RBAC enforcement (403s where expected)
-- [ ] TICKET-505: Integration tests for geo-search endpoints
-- [ ] TICKET-506: GitHub Actions workflow — lint (ruff), test (pytest), on push/PR
-- [ ] TICKET-507: Coverage reporting in CI
+- [x] TICKET-501: pytest fixtures — test DB (via testcontainers or a dedicated test Postgres), test client
+- [x] TICKET-502: Unit tests for `case_service.py`, `sighting_service.py`
+- [x] TICKET-503: Integration tests for auth flow (register/login/refresh)
+- [x] TICKET-504: Integration tests for RBAC enforcement (403s where expected)
+- [x] TICKET-505: Integration tests for geo-search endpoints
+- [x] TICKET-506: GitHub Actions workflow — lint (ruff), test (pytest), on push/PR
+- [x] TICKET-507: Coverage reporting in CI
 
 ## Frontend (parallel track, starts alongside Phase 2)
 

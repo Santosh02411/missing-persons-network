@@ -25,13 +25,15 @@ just design docs):
 
 1. **Architecture & DB schema** ✅ done
 2. **API endpoint design** (routes, request/response models) ✅ done
-3. **Auth/RBAC implementation** ⏳ next
-4. **Geo-search + Redis rate limiting**
-5. **Testing (pytest) + CI/CD (GitHub Actions)**
+3. **Auth/RBAC implementation** ✅ done
+4. **Geo-search + Redis rate limiting** ✅ done
+5. **Testing (pytest) + CI/CD (GitHub Actions)** ✅ done
+
+All 5 backend phases complete. Remaining: frontend (parallel track).
 
 Frontend (React) is a parallel track starting alongside Phase 2.
 
-## What exists right now (Phase 1 + 2)
+## What exists right now (Phase 1 through 5 -- backend complete)
 
 - `app/models/`: `User`, `Case`, `Sighting`, `AuditLog` — full SQLAlchemy
   models with a shared base (`db/base_class.py`) giving UUID PK + timestamps.
@@ -45,19 +47,48 @@ Frontend (React) is a parallel track starting alongside Phase 2.
 - Full `docs/` folder (this file lives there).
 
 - Pydantic schemas for user/token/geo/case/sighting; `core/security.py` (bcrypt
-  hashing + JWT access/refresh tokens); `core/deps.py` (`get_current_user`,
-  `get_current_user_optional`); `services/geo_service.py` (GeoPoint ↔ PostGIS
+  hashing + JWT access/refresh tokens, refresh tokens carry a `jti`);
+  `core/deps.py` (`get_current_user`, `get_current_user_optional`,
+  `require_role(*roles)`, `require_verified_authority_or_admin`);
+  `core/redis_client.py`; `services/geo_service.py` (GeoPoint ↔ PostGIS
   conversion); `services/{auth,case,sighting,admin}_service.py`.
-- Live routes: `/api/v1/auth/{register,login,refresh}`,
-  `/api/v1/cases` (CRUD + status), `/api/v1/sightings` (submit, list, review),
+- Live routes: `/api/v1/auth/{register,login,refresh,logout}`,
+  `/api/v1/cases` (CRUD + claim + status), `/api/v1/sightings` (submit, list, review),
   `/api/v1/admin/authority-requests` (list, approve).
-- **Important:** none of these routes enforce role-based access yet. Any
-  authenticated user can currently call status-change, review, or admin
-  endpoints — every such route has a `TODO(phase-3)` docstring marking it.
+- **RBAC is now enforced.** Status-change, sighting review, and admin
+  endpoints require `require_verified_authority_or_admin` or
+  `require_role(ADMIN)`. Case status change and case edit also have
+  row-level checks (must be the assigned authority / owner / admin, not just
+  the right role). Refresh tokens rotate on every `/refresh` call — reusing a
+  stale one revokes the whole session (stored in Redis, keyed by user id).
 
-**Not built yet:** RBAC role enforcement (`require_role()`), row-level
-ownership checks beyond basic case-edit, geo-search queries, rate limiting,
-tests, CI pipeline, frontend.
+- `services/geo_service.py`: `nearby_sightings()`/`nearby_cases()` using
+  `ST_DWithin`/`ST_Distance` (cases restricted to OPEN status); GiST indexes
+  added in `alembic/versions/0002_geo_indexes.py` (the Phase 1 hand-written
+  migration didn't include these).
+- Live routes added: `GET /api/v1/sightings/nearby`, `GET /api/v1/cases/nearby`.
+- `core/rate_limit.py`: Redis fixed-window rate limiter on
+  `POST /api/v1/sightings` (default 5/minute, keyed by user or IP).
+- `core/cache.py`: versioned Redis cache on `GET /api/v1/cases`, invalidated
+  by `case_service` on every write.
+- Removed unused `slowapi` dependency (custom Redis limiter used instead).
+
+- `app/tests/`: full pytest suite against a real second Postgres+PostGIS
+  database (`TEST_DATABASE_URL`) and real Redis, using the standard
+  SQLAlchemy "external transaction + SAVEPOINT" pattern for per-test
+  isolation (see `conftest.py`). Covers auth (register/login/refresh
+  rotation/logout), case CRUD + ownership + claim + status RBAC, sighting
+  submission + rate limiting + review RBAC, admin RBAC, and service-layer
+  unit tests.
+- `.github/workflows/ci.yml`: lint (ruff) + test (pytest w/ coverage,
+  `--cov-fail-under=70`) on every push/PR, using Postgres+PostGIS and Redis
+  as GitHub Actions service containers.
+- **Not actually run yet** — built and syntax-checked in a sandbox with no
+  network access to install deps or run Postgres/Redis. Run
+  `docker compose exec api pytest` locally to confirm before trusting it.
+
+**Not built yet:** frontend (parallel track, was always meant to start
+alongside Phase 2 — hasn't been picked up yet).
 
 ## Key design decisions already made (don't re-litigate these)
 

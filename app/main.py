@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -25,14 +25,24 @@ app.add_middleware(
 
 
 @app.get("/health", tags=["system"])
-def health_check() -> dict:
-    """Basic liveness check + DB connectivity check."""
+def health_check(response: Response) -> dict:
+    """Basic liveness check + DB connectivity check.
+
+    Returns HTTP 503 (not 200) when the database is unreachable — a 200 here
+    used to be returned even on failure, which silently masked real
+    connectivity problems. If you see 503 with "database": "unreachable",
+    check DATABASE_URL in .env — inside Docker it must point at the service
+    name "db", not "localhost". See README.md "Understanding the connections".
+    """
     db_ok = True
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
     except Exception:
         db_ok = False
+
+    if not db_ok:
+        response.status_code = 503
 
     return {
         "status": "ok" if db_ok else "degraded",
