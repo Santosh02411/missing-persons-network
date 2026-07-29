@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.audit_log import AuditLog
 from app.models.case import Case
@@ -11,6 +11,21 @@ from app.models.sighting import Sighting, SightingStatus
 from app.models.user import User
 from app.schemas.sighting import SightingCreate
 from app.services.geo_service import to_geography
+
+
+def list_pending_sightings(db: Session, limit: int = 50, offset: int = 0) -> list[Sighting]:
+    """Global pending-review queue -- backs the authority dashboard. Eager-
+    loads the parent case (joinedload) so the route can attach case_name to
+    each item without an extra query per row."""
+    stmt = (
+        select(Sighting)
+        .options(joinedload(Sighting.case))
+        .where(Sighting.status == SightingStatus.PENDING)
+        .order_by(Sighting.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(db.scalars(stmt))
 
 
 def create_sighting(db: Session, payload: SightingCreate, reporter: User | None) -> Sighting:

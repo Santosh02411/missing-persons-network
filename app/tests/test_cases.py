@@ -144,3 +144,25 @@ def test_nearby_cases_returns_open_cases_within_radius(client, make_user, auth_h
     results = response.json()
     assert len(results) == 1
     assert results[0]["name"] == "Jane Doe"
+
+
+def test_assigned_to_me_returns_only_this_authoritys_cases(client, make_user, auth_headers):
+    reporter = make_user(role=UserRole.REPORTER)
+    authority_a = make_user(role=UserRole.AUTHORITY, is_verified=True)
+    authority_b = make_user(role=UserRole.AUTHORITY, is_verified=True)
+    case_a = _create_case(client, auth_headers(reporter))
+    case_b = _create_case(client, auth_headers(reporter), name="Other Case")
+    client.post(f"/api/v1/cases/{case_a['id']}/claim", headers=auth_headers(authority_a))
+    client.post(f"/api/v1/cases/{case_b['id']}/claim", headers=auth_headers(authority_b))
+
+    response = client.get("/api/v1/cases/assigned-to-me", headers=auth_headers(authority_a))
+    assert response.status_code == 200
+    ids = [c["id"] for c in response.json()]
+    assert case_a["id"] in ids
+    assert case_b["id"] not in ids
+
+
+def test_assigned_to_me_requires_verified_authority(client, make_user, auth_headers):
+    unverified = make_user(role=UserRole.AUTHORITY, is_verified=False)
+    response = client.get("/api/v1/cases/assigned-to-me", headers=auth_headers(unverified))
+    assert response.status_code == 403

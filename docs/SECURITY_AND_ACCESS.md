@@ -54,6 +54,45 @@ request just failing quietly. `POST /api/v1/auth/logout` revokes the stored
 `jti` directly. Redis is doing double duty here and in Phase 4 (rate
 limiting/caching) — same client, different key prefixes.
 
+## Login lockout
+
+Redis fixed-window failure counter, keyed by the *email being attempted*
+(not user id, so failed attempts against nonexistent emails are tracked too
+without a different response leaking account existence). After
+`LOGIN_FAILURE_THRESHOLD` (default 5) failures within
+`LOGIN_FAILURE_WINDOW_SECONDS` (default 15 min), the email is locked for
+`LOGIN_LOCKOUT_SECONDS` (default 15 min) — `429` with `Retry-After`. A
+successful login clears the counter.
+
+## Password reset
+
+`POST /auth/forgot-password` always returns the same generic response
+whether or not the email is registered — this is deliberate, to prevent
+using the endpoint to enumerate which emails have accounts. Reset tokens
+live in Redis for 1 hour. `POST /auth/reset-password` consumes the token and
+also revokes the user's existing refresh session — a stolen session
+shouldn't survive a password change.
+
+## Email verification
+
+Separate from `is_verified` (which gates authority permissions) — tracks
+whether the account's email has been confirmed via an emailed link.
+**Deliberately doesn't block login or any action.** This project has no
+real email provider configured (`core/email.py` just logs instead of
+sending), so gating access on email confirmation would risk locking people
+out with no way to actually receive the link. The frontend shows a banner
+prompting verification instead.
+
+## Photo uploads
+
+`POST /api/v1/uploads/photo` requires auth, validates content-type
+(`image/jpeg`/`png`/`webp` only) and streams the file in chunks to enforce a
+size cap (`MAX_UPLOAD_BYTES`, default 5MB) without loading the whole file
+into memory first. Filenames are always server-generated (random UUID),
+never derived from the client-supplied filename. Served back via a
+`StaticFiles` mount at `/media/` — not behind auth, since case/sighting
+photos are meant to be publicly viewable once attached to a case.
+
 ## Rate limiting
 
 **Implemented** (Phase 4) in `app/core/rate_limit.py`:

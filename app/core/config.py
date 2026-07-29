@@ -30,5 +30,17 @@ class Settings(BaseSettings):
     # Rate limiting
     SIGHTING_REPORT_RATE_LIMIT: str = "5/minute"
 
+    # Frontend URL, used to build links in emails (verification, password reset)
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    # Photo uploads
+    UPLOAD_DIR: str = "uploads"
+    MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024  # 5MB
+
+    # Login lockout
+    LOGIN_FAILURE_THRESHOLD: int = 5
+    LOGIN_FAILURE_WINDOW_SECONDS: int = 15 * 60
+    LOGIN_LOCKOUT_SECONDS: int = 15 * 60
+
 
 settings = Settings()

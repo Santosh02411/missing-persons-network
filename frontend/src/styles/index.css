@@ -515,3 +515,36 @@ main {
   font-size: 0.85rem;
   color: var(--color-graytext);
 }
+
+/* ---------- Data table (audit log viewer) ---------- */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  background: var(--color-paper);
+  border: 1px solid var(--color-mist);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-mist);
+}
+.data-table th {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-graytext);
+  background: var(--color-cloud);
+}
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+.data-table td.mono {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--color-graytext);
+}

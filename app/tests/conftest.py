@@ -82,7 +82,15 @@ def _clean_redis():
     are real Redis state, not part of the DB transaction rollback above --
     clean them before and after every test so tests can't leak into each
     other (e.g. a rate-limit test tripping the limit for a later test)."""
-    prefixes = ("ratelimit:", "refresh_jti:", "cache:")
+    prefixes = (
+        "ratelimit:",
+        "refresh_jti:",
+        "cache:",
+        "email_verify:",
+        "pwd_reset:",
+        "login_fail:",
+        "login_locked:",
+    )
 
     def _flush():
         for prefix in prefixes:

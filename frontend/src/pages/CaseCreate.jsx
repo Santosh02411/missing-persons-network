@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createCase } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import LocationPicker from "../components/LocationPicker";
+import PhotoUpload from "../components/PhotoUpload";
 
 export default function CaseCreate() {
   const navigate = useNavigate();
@@ -94,17 +95,9 @@ export default function CaseCreate() {
           </div>
 
           <div className="field">
-            <label htmlFor="photo_url">Photo URL</label>
-            <input
-              id="photo_url"
-              type="url"
-              placeholder="https://…"
-              value={form.photo_url}
-              onChange={(e) => updateField("photo_url", e.target.value)}
-            />
-            <p className="field-hint">
-              Paste a link to a photo. Direct file upload isn't supported yet.
-            </p>
+            <label>Photo</label>
+            <PhotoUpload value={form.photo_url} onChange={(url) => updateField("photo_url", url)} />
+            <p className="field-hint">JPEG, PNG, or WEBP, up to 5MB.</p>
           </div>
 
           <div className="field">

@@ -35,3 +35,11 @@ class SightingRead(BaseModel):
     reviewed_by: uuid.UUID | None
     reviewed_at: datetime | None
     created_at: datetime
+
+
+class SightingQueueItem(SightingRead):
+    """SightingRead plus the parent case's name -- used only by the pending-
+    review queue endpoint, so the authority dashboard doesn't need a second
+    request per row just to show which case a sighting belongs to."""
+
+    case_name: str

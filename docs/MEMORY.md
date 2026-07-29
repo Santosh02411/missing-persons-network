@@ -97,10 +97,24 @@ Frontend (React) is a parallel track starting alongside Phase 2.
   privilege-escalation hole. Fixed: role is now
   `Literal["reporter", "authority"]`; regression test added.
 
-**Not built yet:** authority review-queue dashboard, admin dashboard for
-authority approvals (backend endpoint exists, no UI), any UI for the
-nearby-search endpoints. Nothing in `frontend/` has actually run in a
-browser -- no network access here to `npm install`.
+- Authority dashboard (`/dashboard/authority`): pending sightings queue with
+  inline verify/dismiss, assigned-cases list. Backed by two new endpoints:
+  `GET /cases/assigned-to-me`, `GET /sightings/pending`.
+- Admin dashboard (`/dashboard/admin`): authority approvals + an audit log
+  table (`GET /admin/audit-logs`, new).
+- **Post-launch feature batch** (6 features, all done): audit log viewer,
+  nearby-search UI (geolocation button on case list), real photo upload
+  (`POST /uploads/photo`, validated + size-capped, served via `/media/`),
+  email verification (new `email_verified` column + token flow -- doesn't
+  block login, just a banner, since there's no real email provider), login
+  lockout (Redis, 5 failures/15min -> locked 15min), password reset
+  (generic response to prevent enumeration, revokes session on reset).
+- `core/email.py`: stub email sender, logs instead of sending. Swap this one
+  function for a real provider before going further.
+
+Nothing in `frontend/` has actually run in a browser, and the expanded
+pytest suite hasn't actually run either -- no network access here to
+`npm install` or spin up Postgres/Redis. Syntax-checked only.
 
 ## Key design decisions already made (don't re-litigate these)
 

@@ -72,6 +72,18 @@ def get_nearby_cases(
     return [CaseListItem.model_validate(c) for c in cases]
 
 
+@router.get("/assigned-to-me", response_model=list[CaseRead])
+def get_assigned_cases(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> list[CaseRead]:
+    """Backs the authority dashboard's "my cases" list. Registered before
+    /{case_id} for the same reason /nearby is -- otherwise FastAPI tries to
+    parse "assigned-to-me" as a case UUID and 422s."""
+    cases = case_service.list_assigned_cases(db, current_user.id)
+    return [CaseRead.model_validate(c) for c in cases]
+
+
 @router.get("/{case_id}", response_model=CaseRead)
 def get_case(case_id: uuid.UUID, db: Session = Depends(get_db)) -> CaseRead:
     """Public -- case detail. No auth required, matches FR-5."""

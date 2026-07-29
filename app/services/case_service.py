@@ -38,6 +38,19 @@ def get_case_or_404(db: Session, case_id: uuid.UUID) -> Case:
     return case
 
 
+def list_assigned_cases(db: Session, authority_id) -> list[Case]:
+    """Cases assigned to a specific authority -- backs the authority
+    dashboard's "my cases" view. Added alongside the frontend dashboard since
+    there was previously no way to ask "which cases are mine" other than
+    fetching every case and filtering client-side."""
+    stmt = (
+        select(Case)
+        .where(Case.assigned_authority_id == authority_id)
+        .order_by(Case.created_at.desc())
+    )
+    return list(db.scalars(stmt))
+
+
 def list_cases(db: Session, status_filter: CaseStatus | None, limit: int, offset: int) -> list[Case]:
     stmt = select(Case).order_by(Case.created_at.desc()).limit(limit).offset(offset)
     if status_filter is not None:

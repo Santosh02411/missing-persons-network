@@ -27,6 +27,13 @@ class User(Base):
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # Separate from is_verified above (which gates authority permissions) --
+    # this tracks whether the account's email address has been confirmed via
+    # the emailed verification link. Not used to block login or actions (see
+    # docs/SECURITY_AND_ACCESS.md), just surfaced to the frontend so it can
+    # nudge an unverified user to confirm their email.
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     # Only meaningful for AUTHORITY role (e.g. "Belagavi City Police", "Missing Children NGO")
     org_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 

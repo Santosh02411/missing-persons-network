@@ -1,8 +1,11 @@
+import os
+
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-from app.api.v1 import admin, auth, cases, sightings
+from app.api.v1 import admin, auth, cases, sightings, uploads
 from app.core.config import settings
 from app.db.session import engine
 
@@ -22,6 +25,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Uploaded photos are served from here (see services/upload_service.py and
+# api/v1/uploads.py). Created on startup since a fresh checkout won't have
+# this directory yet -- StaticFiles raises if the directory is missing.
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/media", StaticFiles(directory=settings.UPLOAD_DIR), name="media")
 
 
 @app.get("/health", tags=["system"])
@@ -55,8 +64,4 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(cases.router, prefix="/api/v1/cases", tags=["cases"])
 app.include_router(sightings.router, prefix="/api/v1/sightings", tags=["sightings"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
-
-# NOTE (Phase 3): none of the routes above enforce role-based access yet —
-# every route that should be authority/admin-only is marked with a
-# `TODO(phase-3)` docstring at its definition. See docs/SECURITY_AND_ACCESS.md
-# for the full RBAC matrix this will enforce.
+app.include_router(uploads.router, prefix="/api/v1/uploads", tags=["uploads"])

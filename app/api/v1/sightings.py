@@ -8,7 +8,7 @@ from app.core.rate_limit import sighting_rate_limiter
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.geo import GeoPoint
-from app.schemas.sighting import SightingCreate, SightingRead, SightingReview
+from app.schemas.sighting import SightingCreate, SightingQueueItem, SightingRead, SightingReview
 from app.services import sighting_service
 from app.services.geo_service import nearby_sightings
 
@@ -47,6 +47,25 @@ def get_nearby_sightings(
     center = GeoPoint(lat=lat, lng=lng)
     sightings = nearby_sightings(db, center, radius_km, limit)
     return [SightingRead.model_validate(s) for s in sightings]
+
+
+@router.get("/pending", response_model=list[SightingQueueItem])
+def get_pending_sightings(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> list[SightingQueueItem]:
+    """Global pending-review queue for the authority dashboard. Not scoped to
+    "my assigned cases" -- matches the existing design that any verified
+    authority can review any pending sighting (see docs/SECURITY_AND_ACCESS.md)."""
+    sightings = sighting_service.list_pending_sightings(db, limit, offset)
+    items = []
+    for s in sightings:
+        data = SightingRead.model_validate(s).model_dump()
+        data["case_name"] = s.case.name
+        items.append(data)
+    return items
 
 
 @router.get("/case/{case_id}", response_model=list[SightingRead])

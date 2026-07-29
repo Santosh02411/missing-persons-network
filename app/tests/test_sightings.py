@@ -135,3 +135,39 @@ def test_nearby_sightings_within_radius(client, make_user, auth_headers):
     )
     assert response.status_code == 200
     assert len(response.json()) == 1
+
+
+def test_pending_queue_includes_case_name_and_requires_verified_authority(
+    client, make_user, auth_headers
+):
+    reporter = make_user(role=UserRole.REPORTER)
+    unverified = make_user(role=UserRole.AUTHORITY, is_verified=False)
+    verified = make_user(role=UserRole.AUTHORITY, is_verified=True)
+    case = _create_case(client, auth_headers(reporter))
+    client.post("/api/v1/sightings", json=_sighting_payload(case["id"]))
+
+    forbidden = client.get("/api/v1/sightings/pending", headers=auth_headers(unverified))
+    assert forbidden.status_code == 403
+
+    response = client.get("/api/v1/sightings/pending", headers=auth_headers(verified))
+    assert response.status_code == 200
+    items = response.json()
+    assert len(items) == 1
+    assert items[0]["case_name"] == "Jane Doe"
+    assert items[0]["status"] == "pending"
+
+
+def test_pending_queue_excludes_already_reviewed_sightings(client, make_user, auth_headers):
+    reporter = make_user(role=UserRole.REPORTER)
+    authority = make_user(role=UserRole.AUTHORITY, is_verified=True)
+    case = _create_case(client, auth_headers(reporter))
+    sighting = client.post("/api/v1/sightings", json=_sighting_payload(case["id"])).json()
+
+    client.patch(
+        f"/api/v1/sightings/{sighting['id']}/review",
+        json={"status": "verified"},
+        headers=auth_headers(authority),
+    )
+
+    response = client.get("/api/v1/sightings/pending", headers=auth_headers(authority))
+    assert response.json() == []

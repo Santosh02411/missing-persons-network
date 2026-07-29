@@ -57,7 +57,10 @@ export default function Login() {
             {isSubmitting ? "Logging in…" : "Log in"}
           </button>
         </form>
-        <p className="field-hint" style={{ marginTop: "16px", textAlign: "center" }}>
+        <p className="field-hint" style={{ marginTop: "12px", textAlign: "center" }}>
+          <Link to="/forgot-password">Forgot your password?</Link>
+        </p>
+        <p className="field-hint" style={{ marginTop: "8px", textAlign: "center" }}>
           Don't have an account? <Link to="/register">Register</Link>
         </p>
       </div>

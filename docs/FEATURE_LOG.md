@@ -5,6 +5,97 @@ FEATURE_TICKET_LIST.md for that). Newest entries at top.
 
 ---
 
+### 2026-07-29 — Post-launch feature batch: audit logs, nearby search, uploads, email verification, lockout, password reset
+**Status:** Done
+
+- **Audit log viewer** (TICKET-701): `admin_service.list_audit_logs()` +
+  `GET /api/v1/admin/audit-logs` (admin only, optional `target_type` filter),
+  `AuditLogRead` schema. Frontend: a data table on `AdminDashboard` (new
+  `.data-table` CSS). The `AuditLog` table had been recording since Phase 1
+  with no way to read it back until now.
+- **Nearby-search UI** (TICKET-702): "📍 Cases near me" button on `CaseList`
+  using `navigator.geolocation`, calling the existing `/cases/nearby`
+  endpoint. Toggles between normal filtered browsing and a
+  location-radius view.
+- **Real photo upload** (TICKET-703): `services/upload_service.py` validates
+  content-type (`image/jpeg`/`png`/`webp` only) and streams the file in 1MB
+  chunks to enforce `MAX_UPLOAD_BYTES` (default 5MB) without loading huge
+  files into memory. `POST /api/v1/uploads/photo` (auth required — so
+  anonymous sighting tips can't attach a photo unless the tipster logs in
+  first), served back via a `StaticFiles` mount at `/media/`. Frontend:
+  `PhotoUpload` component wired into `CaseCreate` and (auth-gated)
+  `SightingForm`, replacing the old plain-URL text field.
+- **Email verification** (TICKET-704): new `email_verified` column
+  (`alembic/versions/0003_email_verified.py`), deliberately separate from
+  `is_verified` (which gates authority permissions and is unrelated). Token
+  flow via Redis (`email_verify:{token}` → user id, 24h TTL):
+  `POST /auth/verify-email`, `POST /auth/resend-verification`. New
+  `core/email.py` — a stub sender that logs instead of actually sending,
+  since this project has no SMTP/email provider configured; every email
+  call site (`auth_service.send_verification_email`,
+  `auth_service.request_password_reset`) goes through this one function, so
+  it's the only place to swap in a real provider later. **Deliberately
+  doesn't block login or any action** on `email_verified` — with no real
+  email delivery in this dev setup, locking users out entirely would just
+  break the app; frontend shows a dismissable-by-verifying banner instead.
+- **Login lockout** (TICKET-705): Redis fixed-window failure counter keyed
+  by *email* (not user id — needed to rate-limit attempts against
+  nonexistent emails too, without a different code path leaking which
+  emails exist). After `LOGIN_FAILURE_THRESHOLD` (default 5) failures within
+  `LOGIN_FAILURE_WINDOW_SECONDS` (default 15 min), locks for
+  `LOGIN_LOCKOUT_SECONDS` (default 15 min), returning 429 + Retry-After. A
+  successful login clears both counters.
+- **Password reset** (TICKET-706): `POST /auth/forgot-password` always
+  returns the same generic 202 response whether or not the email is
+  registered (prevents account enumeration) — the reset email is only
+  actually "sent" (logged) internally if the account exists.
+  `POST /auth/reset-password` consumes a one-time Redis token (1h TTL) and,
+  notably, **revokes the user's existing refresh session** on reset — if
+  someone else had the account, a stolen session doesn't survive a
+  password change. Frontend: `ForgotPassword.jsx`, `ResetPassword.jsx`.
+- Tests added: `test_account_security.py` (email verification, password
+  reset, login lockout — 13 tests), `test_uploads.py` (4 tests, using
+  `monkeypatch` + `tmp_path` so nothing writes into the real `uploads/`
+  dir), `test_audit_logs.py` (3 tests)
+- Also fixed while touching `auth.py`: a leftover duplicate
+  `from app.core.deps import get_current_user` import line from earlier
+  editing
+
+**Not run in this environment:** same caveat as every phase before this —
+no network access here to actually run `pytest`, `npm install`, or a
+browser. Syntax-checked and manually traced through; verify locally.
+
+---
+
+### 2026-07-27 — Frontend: authority + admin dashboards (TICKET-606/607)
+**Status:** Done
+
+- **Backend additions** (no dashboard-worthy endpoints existed for these):
+  - `GET /api/v1/cases/assigned-to-me` — cases assigned to the calling
+    authority (`case_service.list_assigned_cases`), verified-authority/admin
+    only, registered before `/{case_id}`
+  - `GET /api/v1/sightings/pending` — global pending-review queue
+    (`sighting_service.list_pending_sightings`, eager-loads the parent case
+    via `joinedload` so each row can include `case_name` without an N+1
+    query), verified-authority/admin only. New `SightingQueueItem` schema
+    (`SightingRead` + `case_name`).
+  - Tests added: `test_assigned_to_me_returns_only_this_authoritys_cases`,
+    `test_assigned_to_me_requires_verified_authority`,
+    `test_pending_queue_includes_case_name_and_requires_verified_authority`,
+    `test_pending_queue_excludes_already_reviewed_sightings`
+- **Frontend**: `AuthorityDashboard` (pending queue with inline
+  Verify/Dismiss, assigned-cases list; shows a plain "awaiting approval"
+  message instead of erroring for unverified authority accounts) and
+  `AdminDashboard` (pending authority approvals with an Approve button),
+  both role-gated via `ProtectedRoute`'s `allowedRoles`, linked from the
+  masthead nav that was already wired up
+
+**Not built yet:** audit-log viewer (mentioned in the original ticket title
+but not built — no backend endpoint exists yet to list audit logs; would
+need one), any UI for nearby-search.
+
+---
+
 ### 2026-07-27 — Frontend, first pass (+ a backend security fix)
 **Status:** Core flows done; authority/admin dashboards not yet built
 

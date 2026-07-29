@@ -57,5 +57,14 @@ FEATURE_LOG.md when done.
 - [x] TICKET-603: Case list + case detail pages
 - [x] TICKET-604: Case creation form
 - [x] TICKET-605: Sighting submission form with map picker
-- [ ] TICKET-606: Authority review dashboard
-- [ ] TICKET-607: Admin dashboard (authority approvals, audit log viewer)
+- [x] TICKET-606: Authority review dashboard
+- [x] TICKET-607: Admin dashboard (authority approvals, audit log viewer)
+
+## Post-launch feature batch (added after the original 5 phases + frontend)
+
+- [x] TICKET-701: Audit log viewer — `GET /api/v1/admin/audit-logs` (admin only, filterable by target_type) + admin dashboard table
+- [x] TICKET-702: Nearby-search UI — "Cases near me" button on the case list using browser geolocation + `/cases/nearby`
+- [x] TICKET-703: Real photo upload — `POST /api/v1/uploads/photo` (content-type + size validated, served via `/media/`), `PhotoUpload` component wired into case creation and sighting submission
+- [x] TICKET-704: Email verification — `email_verified` column (migration 0003), verification token flow (`/auth/verify-email`, `/auth/resend-verification`), stub email sender (`core/email.py`, logs instead of sending), frontend banner + `/verify-email` page
+- [x] TICKET-705: Login lockout — Redis-backed failure counter, locks out for `LOGIN_LOCKOUT_SECONDS` after `LOGIN_FAILURE_THRESHOLD` consecutive failures per email, 429 + Retry-After
+- [x] TICKET-706: Password reset — `/auth/forgot-password` (generic response, no account enumeration) + `/auth/reset-password` (revokes existing session), frontend pages

@@ -2,8 +2,11 @@ import { useState } from "react";
 import { submitSighting } from "../api/sightings";
 import { extractErrorMessage } from "../api/client";
 import LocationPicker from "./LocationPicker";
+import PhotoUpload from "./PhotoUpload";
+import { useAuth } from "../context/AuthContext";
 
 export default function SightingForm({ caseId, defaultCenter, onSubmitted }) {
+  const { isAuthenticated } = useAuth();
   const [location, setLocation] = useState(null);
   const [addressText, setAddressText] = useState("");
   const [description, setDescription] = useState("");
@@ -95,14 +98,12 @@ export default function SightingForm({ caseId, defaultCenter, onSubmitted }) {
       </div>
 
       <div className="field">
-        <label htmlFor="photo_url">Photo URL (optional)</label>
-        <input
-          id="photo_url"
-          type="url"
-          placeholder="https://…"
-          value={photoUrl}
-          onChange={(e) => setPhotoUrl(e.target.value)}
-        />
+        <label>Photo (optional)</label>
+        {isAuthenticated ? (
+          <PhotoUpload value={photoUrl} onChange={setPhotoUrl} />
+        ) : (
+          <p className="field-hint">Log in if you'd like to attach a photo to this sighting.</p>
+        )}
       </div>
 
       <button className="btn btn-primary" type="submit" disabled={isSubmitting}>

@@ -33,3 +33,18 @@ def approve_authority(db: Session, user_id: uuid.UUID, admin: User) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def list_audit_logs(
+    db: Session,
+    target_type: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AuditLog]:
+    """Backs the admin audit-log viewer. The AuditLog table has been written
+    to since Phase 1 (every case status change, sighting review, and
+    authority approval) but had no read path until now."""
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).offset(offset)
+    if target_type is not None:
+        stmt = stmt.where(AuditLog.target_type == target_type)
+    return list(db.scalars(stmt))
