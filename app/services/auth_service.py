@@ -28,14 +28,18 @@ def register_user(db: Session, payload: UserCreate) -> User:
 
     # Authority accounts start unverified regardless of what's requested at
     # signup — an admin must approve them (see docs/SECURITY_AND_ACCESS.md).
-    is_verified = payload.role == UserRole.REPORTER
+    # payload.role is a Literal["reporter", "authority"] (see schemas/user.py
+    # for why admin can never come through here), so this UserRole(...)
+    # conversion can only ever produce REPORTER or AUTHORITY.
+    role = UserRole(payload.role)
+    is_verified = role == UserRole.REPORTER
 
     user = User(
         email=payload.email,
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name,
-        role=payload.role,
-        org_name=payload.org_name if payload.role == UserRole.AUTHORITY else None,
+        role=role,
+        org_name=payload.org_name if role == UserRole.AUTHORITY else None,
         is_verified=is_verified,
     )
     db.add(user)

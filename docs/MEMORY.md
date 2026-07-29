@@ -87,8 +87,20 @@ Frontend (React) is a parallel track starting alongside Phase 2.
   network access to install deps or run Postgres/Redis. Run
   `docker compose exec api pytest` locally to confirm before trusting it.
 
-**Not built yet:** frontend (parallel track, was always meant to start
-alongside Phase 2 — hasn't been picked up yet).
+- `frontend/`: Vite+React scaffold, auth context (token refresh, session
+  restore via new `GET /api/v1/auth/me`), pages for login/register/case
+  list/case detail/case create, sighting submission with a Leaflet map
+  picker, inline claim/status controls on the case detail page.
+- **Security fix found while building this**: `UserCreate.role` used to
+  accept the full `UserRole` enum including `admin`, with no verification
+  gate on admin the way authority has `is_verified` -- a real
+  privilege-escalation hole. Fixed: role is now
+  `Literal["reporter", "authority"]`; regression test added.
+
+**Not built yet:** authority review-queue dashboard, admin dashboard for
+authority approvals (backend endpoint exists, no UI), any UI for the
+nearby-search endpoints. Nothing in `frontend/` has actually run in a
+browser -- no network access here to `npm install`.
 
 ## Key design decisions already made (don't re-litigate these)
 

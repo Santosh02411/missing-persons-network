@@ -13,7 +13,10 @@ This project is being built in five sequential phases:
 | 5 | Testing (pytest) + CI/CD (GitHub Actions) | ✅ Done |
 
 All 5 backend phases are now complete. Remaining work is the frontend track
-(see the "Frontend" section of FEATURE_TICKET_LIST.md).
+(see the "Frontend" section of FEATURE_TICKET_LIST.md) — first pass done
+(TICKET-601–605): scaffold, auth, case list/detail/create, sighting
+submission. Still open: TICKET-606 (authority dashboard), TICKET-607 (admin
+dashboard).
 | 4 | Geo-search + Redis rate limiting | Not started |
 | 5 | Testing (pytest) + CI/CD (GitHub Actions) | Not started |
 

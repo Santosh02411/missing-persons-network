@@ -52,10 +52,10 @@ FEATURE_LOG.md when done.
 
 ## Frontend (parallel track, starts alongside Phase 2)
 
-- [ ] TICKET-601: React app scaffold (Vite), routing
-- [ ] TICKET-602: Auth pages (login/register) + token storage
-- [ ] TICKET-603: Case list + case detail pages
-- [ ] TICKET-604: Case creation form
-- [ ] TICKET-605: Sighting submission form with map picker
+- [x] TICKET-601: React app scaffold (Vite), routing
+- [x] TICKET-602: Auth pages (login/register) + token storage
+- [x] TICKET-603: Case list + case detail pages
+- [x] TICKET-604: Case creation form
+- [x] TICKET-605: Sighting submission form with map picker
 - [ ] TICKET-606: Authority review dashboard
 - [ ] TICKET-607: Admin dashboard (authority approvals, audit log viewer)

@@ -5,6 +5,48 @@ FEATURE_TICKET_LIST.md for that). Newest entries at top.
 
 ---
 
+### 2026-07-27 — Frontend, first pass (+ a backend security fix)
+**Status:** Core flows done; authority/admin dashboards not yet built
+
+- Vite + React scaffold: `frontend/` — routing (`react-router-dom`), axios
+  API client with automatic access-token refresh on 401 (de-duplicated across
+  concurrent failures), `AuthContext` for session state
+- Pages: `Login`, `Register` (reporter or authority signup), `CaseList`
+  (status filter chips), `CaseDetail` (info, map, sightings list, sighting
+  form, inline claim/status controls for authorities), `CaseCreate`
+  (map-based last-seen location picker), `NotFound`
+- Components: `Masthead` (role-aware nav), `CaseCard`, `StatusBadge`,
+  `SightingForm`, `LocationPicker` (Leaflet + OpenStreetMap tiles),
+  `ProtectedRoute`
+- Design: calm civic-registry palette (cool ink/slate/cloud — deliberately
+  not the cream+terracotta or near-black+neon AI-default looks), Lora
+  (display) + Inter (body) + IBM Plex Mono (data/labels); signature element
+  is a diagonal "status ribbon" in each case card's corner, color-keyed to
+  case status
+- **Backend fix, found while building the register form**: `UserCreate.role`
+  previously accepted the full `UserRole` enum, including `admin` — with no
+  verification gate on admin the way authority has `is_verified`, this was a
+  straight privilege-escalation hole (anyone could POST `role: "admin"` and
+  get full admin access). Fixed: `role` is now
+  `Literal["reporter", "authority"]` in `app/schemas/user.py`; admin accounts
+  are not self-registerable through this endpoint at all. Regression test
+  added: `test_register_cannot_self_grant_admin_role` in `app/tests/test_auth.py`.
+- **Backend addition**: `GET /api/v1/auth/me` — didn't exist before; added
+  because the frontend needs a way to identify the logged-in user (and their
+  role) from a stored token after a page reload.
+
+**Not built yet:** authority review-queue dashboard (TICKET-606), admin
+dashboard for authority approvals (TICKET-607 — the backend endpoint exists,
+no UI yet), any UI for the `/cases/nearby` / `/sightings/nearby` endpoints.
+
+**Not run in this environment:** no network access to `npm install`, so
+nothing here has actually been built or run in a browser. Files were
+syntax-reviewed (brace/paren balance, default-export presence) but not
+executed — run `npm install && npm run dev` locally and report back if
+anything breaks.
+
+---
+
 ### 2026-07-27 — Phase 5: Testing & CI/CD
 **Status:** Done
 

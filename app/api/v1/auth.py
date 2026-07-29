@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.deps import get_current_user
 from app.core.security import (
     InvalidTokenError,
     create_access_token,
@@ -80,3 +81,10 @@ def logout(current_user: User = Depends(get_current_user)) -> None:
     token already issued keeps working until it naturally expires (it's
     stateless by design) -- logout mainly prevents further refreshes."""
     revoke_refresh_token(current_user.id)
+
+
+@router.get("/me", response_model=UserRead)
+def get_me(current_user: User = Depends(get_current_user)) -> User:
+    """Lets the frontend identify who's logged in (and their role) after a
+    page reload, when it has an access token but no in-memory user object."""
+    return current_user

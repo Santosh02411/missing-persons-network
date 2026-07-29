@@ -30,6 +30,16 @@ def test_register_authority_starts_unverified(client):
     assert body["is_verified"] is False  # must be approved by an admin
 
 
+def test_register_cannot_self_grant_admin_role(client):
+    """Regression test: role is a Literal["reporter", "authority"] in
+    UserCreate specifically so this can never succeed -- admin has no
+    verification gate of its own, so accepting role="admin" here would be a
+    straight privilege-escalation hole. See schemas/user.py."""
+    payload = _register_payload(email="wannabe-admin@example.com", role="admin")
+    response = client.post("/api/v1/auth/register", json=payload)
+    assert response.status_code == 422
+
+
 def test_register_duplicate_email_conflicts(client):
     client.post("/api/v1/auth/register", json=_register_payload())
     response = client.post("/api/v1/auth/register", json=_register_payload())
