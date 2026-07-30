@@ -14,16 +14,19 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # GiST indexes accelerate ST_DWithin/ST_Distance queries used by
-    # geo_service.nearby_cases() / nearby_sightings() (see
-    # docs/TECHNICAL_ARCHITECTURE.md). Without these, every nearby-search
-    # query does a full table scan computing distance for every row.
+    # IF NOT EXISTS matters here: GeoAlchemy2's Geography column type
+    # defaults to spatial_index=True, which means it ALREADY auto-created a
+    # GIST index (with this exact idx_<table>_<column> naming convention)
+    # when migration 0001 created these tables -- a fact this migration
+    # didn't originally account for, causing a "relation already exists"
+    # error. This migration is now a documented no-op in the common case,
+    # and a safety net if that default ever changes.
     op.execute(
-        "CREATE INDEX idx_cases_last_seen_location "
+        "CREATE INDEX IF NOT EXISTS idx_cases_last_seen_location "
         "ON cases USING GIST (last_seen_location)"
     )
     op.execute(
-        "CREATE INDEX idx_sightings_location "
+        "CREATE INDEX IF NOT EXISTS idx_sightings_location "
         "ON sightings USING GIST (location)"
     )
 

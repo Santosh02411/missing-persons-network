@@ -19,14 +19,18 @@ depends_on = None
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
 
+    # NOTE: these ENUM objects are defined here but deliberately NOT created
+    # manually (no .create() call). When used as a column type inside
+    # op.create_table() below, SQLAlchemy automatically creates the
+    # corresponding Postgres type as part of creating that table. Calling
+    # .create() here AND relying on that automatic creation both try to
+    # create the same type, and the second one fails with "already exists" --
+    # that was a real bug in an earlier version of this migration.
     user_role = postgresql.ENUM("reporter", "authority", "admin", name="user_role")
     case_status = postgresql.ENUM("open", "lead_found", "resolved", name="case_status")
     sighting_status = postgresql.ENUM(
         "pending", "verified", "dismissed", name="sighting_status"
     )
-    user_role.create(op.get_bind())
-    case_status.create(op.get_bind())
-    sighting_status.create(op.get_bind())
 
     op.create_table(
         "users",
@@ -99,7 +103,9 @@ def downgrade() -> None:
     op.drop_index("ix_users_email", table_name="users")
     op.drop_table("users")
 
-    postgresql.ENUM(name="sighting_status").drop(op.get_bind())
-    postgresql.ENUM(name="case_status").drop(op.get_bind())
-    postgresql.ENUM(name="user_role").drop(op.get_bind())
+    # NOTE: no manual DROP TYPE calls here either -- dropping each table
+    # above automatically drops its enum column's type too (the symmetric
+    # counterpart of the automatic creation in upgrade()). Manually dropping
+    # them again here would fail with "type does not exist" for the same
+    # reason the old upgrade() failed with "already exists".
     op.execute("DROP EXTENSION IF EXISTS postgis")
