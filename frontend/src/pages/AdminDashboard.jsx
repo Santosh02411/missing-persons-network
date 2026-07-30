@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { approveAuthorityRequest, listAuditLogs, listAuthorityRequests } from "../api/admin";
+import {
+  approveAuthorityRequest,
+  deactivateUser,
+  listAuditLogs,
+  listAuthorityRequests,
+  listUsers,
+  reactivateUser,
+} from "../api/admin";
 import { extractErrorMessage } from "../api/client";
 
 function shortId(id) {
@@ -9,6 +16,7 @@ function shortId(id) {
 export default function AdminDashboard() {
   const [pending, setPending] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -17,12 +25,14 @@ export default function AdminDashboard() {
     setIsLoading(true);
     setError(null);
     try {
-      const [{ data: requests }, { data: logs }] = await Promise.all([
+      const [{ data: requests }, { data: logs }, { data: userList }] = await Promise.all([
         listAuthorityRequests(),
         listAuditLogs({ limit: 50 }),
+        listUsers({ limit: 100 }),
       ]);
       setPending(requests);
       setAuditLogs(logs);
+      setUsers(userList);
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't load the dashboard."));
     } finally {
@@ -41,6 +51,20 @@ export default function AdminDashboard() {
       setPending((prev) => prev.filter((u) => u.id !== userId));
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't approve that account."));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleToggleActive(targetUser) {
+    setBusyId(targetUser.id);
+    try {
+      const { data } = targetUser.is_active
+        ? await deactivateUser(targetUser.id)
+        : await reactivateUser(targetUser.id);
+      setUsers((prev) => prev.map((u) => (u.id === data.id ? data : u)));
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't update that account."));
     } finally {
       setBusyId(null);
     }
@@ -87,6 +111,47 @@ export default function AdminDashboard() {
             ))}
           </div>
         )}
+      </section>
+
+      <section style={{ marginBottom: 40 }}>
+        <div className="section-heading">
+          <h3 style={{ margin: 0 }}>Users ({users.length})</h3>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>2FA</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.full_name}</td>
+                  <td className="mono">{u.email}</td>
+                  <td>{u.role}</td>
+                  <td>{u.is_active ? "Active" : "Deactivated"}</td>
+                  <td>{u.totp_enabled ? "On" : "Off"}</td>
+                  <td>
+                    <button
+                      className={u.is_active ? "btn btn-danger" : "btn btn-secondary"}
+                      style={{ padding: "4px 10px", fontSize: "0.8rem" }}
+                      disabled={busyId === u.id}
+                      onClick={() => handleToggleActive(u)}
+                    >
+                      {u.is_active ? "Deactivate" : "Reactivate"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section>

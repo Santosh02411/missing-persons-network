@@ -90,13 +90,18 @@ def test_refresh_rotates_token_and_invalidates_old_one(client):
     assert reuse_attempt.status_code == 401
 
 
-def test_logout_revokes_refresh_token(client, make_user, auth_headers):
+def test_logout_revokes_refresh_token(client, make_user):
     user = make_user(role=UserRole.REPORTER)
     login = client.post(
         "/api/v1/auth/login", json={"email": user.email, "password": "testpassword123"}
     ).json()
 
-    logout_response = client.post("/api/v1/auth/logout", headers=auth_headers(user))
+    # Use the real session's own access token -- not the auth_headers fixture,
+    # which mints an unrelated throwaway session and would revoke the wrong one.
+    logout_response = client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {login['access_token']}"},
+    )
     assert logout_response.status_code == 204
 
     refresh_after_logout = client.post(

@@ -5,6 +5,51 @@ FEATURE_TICKET_LIST.md for that). Newest entries at top.
 
 ---
 
+### 2026-07-30 — Multi-device sessions, account deactivation, 2FA
+**Status:** Done
+
+- **Multi-device sessions**: refresh-token storage redesigned from one
+  jti-per-user to one jti-per-session (`sid`, embedded in both access and
+  refresh tokens). Logging in on a second device no longer invalidates the
+  first. `GET /auth/sessions` (list), `DELETE /auth/sessions/{id}` (revoke
+  one), `POST /auth/logout-all` (revoke every session). Frontend: sessions
+  list + revoke buttons on the new `AccountSecurity` page.
+- **Admin account deactivation**: `POST /admin/users/{id}/deactivate` /
+  `/reactivate`, `GET /admin/users` (needed so an admin can find a user to
+  act on). Deactivation immediately revokes all of that user's sessions
+  (`get_current_user` and `/refresh` already checked `is_active` from
+  earlier phases — this just adds the way to set it). Admin can't deactivate
+  their own account. Frontend: users table on `AdminDashboard`.
+- **Two-factor auth (TOTP)**: `pyotp`-based, gated to authority/admin roles.
+  `/auth/2fa/setup` → `/verify` → enabled; `/auth/2fa/disable` requires a
+  valid code. Login becomes two-step when enabled:
+  `POST /auth/login` returns `{mfa_required: true, mfa_token}` instead of
+  tokens; `POST /auth/2fa/login` (mfa_token + code) completes it. Frontend:
+  2FA setup/disable on `AccountSecurity` (QR via `qrcode.react`), two-step
+  `Login` page.
+- Tests: `test_security_features.py` (20 tests) covering all three.
+- **Bugs caught and fixed while wiring the frontend in**, worth flagging
+  explicitly:
+  1. `api/v1/auth.py` still called the old `create_access_token(user_id)` /
+     `create_refresh_token(user_id)` / `store_refresh_jti(user_id, jti)`
+     signatures after `security.py`/`auth_service.py` had already moved to
+     session-aware signatures — would have crashed every login at runtime.
+  2. A bad edit had corrupted `admin_service.py`'s `list_audit_logs`
+     function (deleted its `def` line, leaving orphaned parameters).
+  3. `AuthContext`'s `completeMfaLogin` function was defined but never
+     added to the context's exposed `value` object — `Login.jsx`
+     destructuring it would have crashed with "not a function" the moment
+     anyone with 2FA enabled tried to log in.
+  4. `test_logout_revokes_refresh_token` mixed a real login session with an
+     unrelated throwaway test token for the logout call — would have
+     falsely failed after the multi-device redesign.
+  None of these were caught by `py_compile` (syntax-only) — found via
+  manual cross-referencing of every import against actual definitions,
+  since this sandbox has no network access to actually install
+  dependencies and import-test the code for real.
+
+---
+
 ### 2026-07-29 — Post-launch feature batch: audit logs, nearby search, uploads, email verification, lockout, password reset
 **Status:** Done
 

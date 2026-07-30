@@ -36,6 +36,7 @@ class UserRead(BaseModel):
     is_verified: bool
     is_active: bool
     email_verified: bool
+    totp_enabled: bool
     org_name: str | None = None
 
 

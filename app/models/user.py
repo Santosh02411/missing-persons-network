@@ -37,6 +37,14 @@ class User(Base):
     # Only meaningful for AUTHORITY role (e.g. "Belagavi City Police", "Missing Children NGO")
     org_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Two-factor auth (TOTP). totp_secret is set (but totp_enabled stays
+    # False) while setup is pending confirmation via /auth/2fa/verify --
+    # see docs/SECURITY_AND_ACCESS.md for why the secret is stored in
+    # plaintext here (a documented tradeoff, not an oversight) and for the
+    # decision to gate setup to authority/admin roles only.
+    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     cases_reported = relationship(
         "Case", back_populates="reporter", foreign_keys="Case.created_by"
     )

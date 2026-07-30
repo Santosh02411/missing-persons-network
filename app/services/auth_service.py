@@ -1,4 +1,6 @@
+import json
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -8,20 +10,18 @@ from app.core.config import settings
 from app.core.email import send_email
 from app.core.redis_client import redis_client
 from app.core.security import hash_password, verify_password
+from app.core.totp import generate_totp_secret, get_provisioning_uri, verify_totp_code
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate
 
-REFRESH_KEY_PREFIX = "refresh_jti"
+SESSION_KEY_PREFIX = "refresh_jti"  # kept for backwards-compatible key naming
+SESSION_SET_PREFIX = "user_sessions"
 LOGIN_FAIL_PREFIX = "login_fail"
 LOGIN_LOCK_PREFIX = "login_locked"
 EMAIL_VERIFY_PREFIX = "email_verify"
 PASSWORD_RESET_PREFIX = "pwd_reset"
 PASSWORD_RESET_TTL_SECONDS = 60 * 60  # 1 hour
 EMAIL_VERIFY_TTL_SECONDS = 24 * 60 * 60  # 24 hours
-
-
-def _refresh_key(user_id) -> str:
-    return f"{REFRESH_KEY_PREFIX}:{user_id}"
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
@@ -102,6 +102,8 @@ def _clear_login_failures(email: str) -> None:
 
 
 def authenticate_user(db: Session, email: str, password: str) -> User:
+    """Verifies email+password only. Does NOT check 2FA -- the caller (the
+    /auth/login route) decides what to do next based on user.totp_enabled."""
     _check_not_locked(email)
 
     user = get_user_by_email(db, email)
@@ -122,32 +124,106 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
 
 
 # ---------------------------------------------------------------------------
-# Refresh token rotation (Phase 3)
+# Multi-device sessions
 # ---------------------------------------------------------------------------
+# Each login/register creates an independent session (a random session_id,
+# "sid"), so logging in on a second device does NOT invalidate the first --
+# previously this stored a single refresh-token jti per *user*, meaning a
+# second login silently kicked out the first device.
+#
+# Redis layout:
+#   refresh_jti:{user_id}:{sid} -> JSON {"jti", "created_at", "user_agent"}
+#     (TTL = refresh token lifetime; this is the source of truth for whether
+#      a given (sid, jti) pair is still valid)
+#   user_sessions:{user_id} -> Redis SET of sid
+#     (lets us list/revoke "all of this user's sessions"; entries are
+#      cleaned up lazily -- if the individual key has already expired when we
+#      look it up, we remove the stale sid from the set at that point)
 
 
-def store_refresh_jti(user_id, jti: str) -> None:
-    """Record the *current* valid refresh token's jti for this user in Redis,
-    with a TTL matching the token's own expiry. Overwrites any previous jti —
-    logging in again (or refreshing) invalidates the prior refresh token,
-    since only the latest jti is considered valid."""
-    redis_client.set(
-        _refresh_key(user_id),
-        jti,
-        ex=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+def create_session_id() -> str:
+    return uuid.uuid4().hex
+
+
+def _session_key(user_id, sid: str) -> str:
+    return f"{SESSION_KEY_PREFIX}:{user_id}:{sid}"
+
+
+def _session_set_key(user_id) -> str:
+    return f"{SESSION_SET_PREFIX}:{user_id}"
+
+
+def store_refresh_jti(user_id, sid: str, jti: str, user_agent: str | None = None) -> None:
+    """Records the current valid refresh-token jti for this specific session.
+    Called on both login (new session) and refresh (same session, rotated jti)
+    -- in both cases this also refreshes the TTL, so an actively-used session
+    doesn't expire out from under someone mid-use."""
+    value = json.dumps(
+        {
+            "jti": jti,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "user_agent": user_agent,
+        }
     )
+    redis_client.set(
+        _session_key(user_id, sid), value, ex=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    )
+    redis_client.sadd(_session_set_key(user_id), sid)
 
 
-def is_refresh_jti_valid(user_id, jti: str) -> bool:
-    stored = redis_client.get(_refresh_key(user_id))
-    return stored is not None and stored == jti
+def is_refresh_jti_valid(user_id, sid: str, jti: str) -> bool:
+    stored = redis_client.get(_session_key(user_id, sid))
+    if stored is None:
+        return False
+    try:
+        return json.loads(stored)["jti"] == jti
+    except (json.JSONDecodeError, KeyError):
+        return False
 
 
+def revoke_session(user_id, sid: str) -> None:
+    """Used by logout (single device) and internally when a stale/reused
+    refresh token is presented for that session."""
+    redis_client.delete(_session_key(user_id, sid))
+    redis_client.srem(_session_set_key(user_id), sid)
+
+
+def revoke_all_sessions(user_id) -> None:
+    """Used by 'log out everywhere', password reset, and admin account
+    deactivation -- every device is signed out, not just the current one."""
+    sids = redis_client.smembers(_session_set_key(user_id))
+    for sid in sids:
+        redis_client.delete(_session_key(user_id, sid))
+    redis_client.delete(_session_set_key(user_id))
+
+
+def list_sessions(user_id) -> list[dict]:
+    """Backs GET /auth/sessions ("your devices"). Lazily drops any sid whose
+    individual key has already expired, instead of leaving stale entries in
+    the set forever."""
+    sids = redis_client.smembers(_session_set_key(user_id))
+    sessions = []
+    for sid in sids:
+        raw = redis_client.get(_session_key(user_id, sid))
+        if raw is None:
+            redis_client.srem(_session_set_key(user_id), sid)
+            continue
+        data = json.loads(raw)
+        sessions.append(
+            {
+                "session_id": sid,
+                "created_at": data.get("created_at"),
+                "user_agent": data.get("user_agent"),
+            }
+        )
+    return sorted(sessions, key=lambda s: s["created_at"], reverse=True)
+
+
+# Backwards-compatible alias -- older call sites (password reset, admin
+# deactivation) conceptually want "kill this user's session(s)"; multi-device
+# support means that's now "all sessions" rather than a single one.
 def revoke_refresh_token(user_id) -> None:
-    """Used by logout, password reset, and internally when a stale/reused
-    refresh token is presented — treat that as a signal to kill the whole
-    refresh session."""
-    redis_client.delete(_refresh_key(user_id))
+    revoke_all_sessions(user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +315,61 @@ def reset_password(db: Session, token: str, new_password: str) -> User:
     db.commit()
     db.refresh(user)
 
-    # Resetting the password invalidates any existing session -- if someone
-    # else had access to the old password/refresh token, this cuts them off.
-    revoke_refresh_token(user.id)
+    # Resetting the password invalidates every existing session -- if someone
+    # else had access to the old password/a refresh token, this cuts them off
+    # on every device, not just the one making the reset request.
+    revoke_all_sessions(user.id)
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Two-factor auth (TOTP)
+# ---------------------------------------------------------------------------
+
+
+def start_totp_setup(db: Session, user: User) -> tuple[str, str]:
+    """Generates a new secret and stores it un-confirmed (totp_enabled stays
+    False until confirm_totp_setup succeeds). Calling this again before
+    confirming just overwrites the pending secret -- lets someone restart if
+    they didn't finish scanning the QR code in time."""
+    if user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Two-factor authentication is already enabled. Disable it first to set up a new authenticator.",
+        )
+    secret = generate_totp_secret()
+    user.totp_secret = secret
+    db.commit()
+    return secret, get_provisioning_uri(secret, user.email)
+
+
+def confirm_totp_setup(db: Session, user: User, code: str) -> User:
+    if not user.totp_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No two-factor setup in progress. Call /auth/2fa/setup first.",
+        )
+    if not verify_totp_code(user.totp_secret, code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect code. Check your authenticator app and try again.",
+        )
+    user.totp_enabled = True
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def disable_totp(db: Session, user: User, code: str) -> User:
+    if not user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Two-factor authentication is not enabled on this account.",
+        )
+    if not verify_totp_code(user.totp_secret, code):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect code.")
+    user.totp_enabled = False
+    user.totp_secret = None
+    db.commit()
+    db.refresh(user)
     return user

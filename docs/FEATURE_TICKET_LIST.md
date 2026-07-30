@@ -68,3 +68,6 @@ FEATURE_LOG.md when done.
 - [x] TICKET-704: Email verification — `email_verified` column (migration 0003), verification token flow (`/auth/verify-email`, `/auth/resend-verification`), stub email sender (`core/email.py`, logs instead of sending), frontend banner + `/verify-email` page
 - [x] TICKET-705: Login lockout — Redis-backed failure counter, locks out for `LOGIN_LOCKOUT_SECONDS` after `LOGIN_FAILURE_THRESHOLD` consecutive failures per email, 429 + Retry-After
 - [x] TICKET-706: Password reset — `/auth/forgot-password` (generic response, no account enumeration) + `/auth/reset-password` (revokes existing session), frontend pages
+- [x] TICKET-707: Multi-device sessions — sid-based refresh token storage, `/auth/sessions` (list/revoke), `/auth/logout-all`, AccountSecurity page
+- [x] TICKET-708: Admin account deactivation — `/admin/users` (list), `/admin/users/{id}/deactivate`/`reactivate`, users table on AdminDashboard
+- [x] TICKET-709: Two-factor auth (TOTP) for authority/admin — `/auth/2fa/{setup,verify,disable,login}`, two-step Login page, QR setup on AccountSecurity

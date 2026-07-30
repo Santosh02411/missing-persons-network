@@ -28,6 +28,7 @@ export default function Masthead() {
                 <Link to="/dashboard/authority">Authority queue</Link>
               )}
               {user.role === "admin" && <Link to="/dashboard/admin">Admin</Link>}
+              <Link to="/account/security">Security</Link>
               <span className="masthead-user">{user.full_name}</span>
               <button onClick={handleLogout} style={{ background: "none", border: "none", cursor: "pointer" }}>
                 Log out

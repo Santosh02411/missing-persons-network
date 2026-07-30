@@ -135,6 +135,10 @@ def auth_headers():
     """auth_headers(user) -> {"Authorization": "Bearer <token>"}"""
 
     def _headers(user: User) -> dict:
-        return {"Authorization": f"Bearer {create_access_token(user.id)}"}
+        # Tests exercise plain authenticated routes, not session-specific
+        # behavior (logout/session listing) via this fixture, so a
+        # throwaway sid is fine here -- tests that specifically cover
+        # sessions/logout drive the real /auth/login flow instead.
+        return {"Authorization": f"Bearer {create_access_token(user.id, uuid.uuid4().hex)}"}
 
     return _headers

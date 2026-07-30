@@ -28,3 +28,37 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class LoginResult(BaseModel):
+    """Response shape for POST /auth/login. Two possible outcomes in one
+    schema (rather than a Union) for simpler OpenAPI docs and frontend
+    handling: either tokens are issued directly, or -- if the account has 2FA
+    enabled -- mfa_required=True and mfa_token must be paired with a TOTP
+    code at POST /auth/2fa/login to actually get tokens."""
+
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    mfa_required: bool = False
+    mfa_token: str | None = None
+
+
+class TwoFactorSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class TwoFactorCodeRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+
+
+class TwoFactorLoginRequest(BaseModel):
+    mfa_token: str
+    code: str = Field(min_length=6, max_length=6)
+
+
+class SessionRead(BaseModel):
+    session_id: str
+    created_at: str
+    user_agent: str | None = None

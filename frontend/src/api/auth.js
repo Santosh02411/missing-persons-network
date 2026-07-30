@@ -31,3 +31,31 @@ export function forgotPassword(email) {
 export function resetPassword(token, new_password) {
   return apiClient.post("/auth/reset-password", { token, new_password });
 }
+
+export function loginWith2FA(mfa_token, code) {
+  return apiClient.post("/auth/2fa/login", { mfa_token, code });
+}
+
+export function setup2FA() {
+  return apiClient.post("/auth/2fa/setup");
+}
+
+export function verify2FASetup(code) {
+  return apiClient.post("/auth/2fa/verify", { code });
+}
+
+export function disable2FA(code) {
+  return apiClient.post("/auth/2fa/disable", { code });
+}
+
+export function listSessions() {
+  return apiClient.get("/auth/sessions");
+}
+
+export function deleteSession(sessionId) {
+  return apiClient.delete(`/auth/sessions/${sessionId}`);
+}
+
+export function logoutAll() {
+  return apiClient.post("/auth/logout-all");
+}

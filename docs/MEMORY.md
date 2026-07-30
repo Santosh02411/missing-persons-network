@@ -142,3 +142,26 @@ pytest suite hasn't actually run either -- no network access here to
 Wants real, working code delivered as files/zips — not just explanations or
 suggestions. Prefers a phased, one-thing-at-a-time build order rather than
 everything at once.
+
+
+## Latest batch (2026-07-30): multi-device sessions, deactivation, 2FA
+
+- Refresh tokens are now per-session (sid), not per-user -- logging in on a
+  second device no longer kills the first. `/auth/sessions`,
+  `/auth/logout-all`, `/auth/sessions/{id}` DELETE.
+- Admin can deactivate/reactivate accounts (`/admin/users*`), which
+  immediately revokes all of that user's sessions.
+- TOTP-based 2FA for authority/admin accounts (`pyotp`), two-step login flow
+  when enabled. New `AccountSecurity` frontend page ties all three together
+  (2FA setup/disable, session list/revoke, logout-all).
+- Found and fixed 4 real bugs this round via manual import cross-referencing
+  (no way to actually run/import-test the code in this sandbox -- no network
+  to install dependencies): stale token-issuance signatures in auth.py after
+  security.py/auth_service.py had already moved to session-aware calls, a
+  corrupted admin_service.py function from a bad edit, a missing
+  `completeMfaLogin` in AuthContext's exposed value (would have crashed
+  Login.jsx for any 2FA-enabled account), and a broken logout test.
+- **Still true: nothing has actually been run.** Every check so far has been
+  static (py_compile, manual import/export cross-referencing). A real
+  `npm install` + `docker compose up` + browser test is the next real
+  verification step, whenever that's possible.

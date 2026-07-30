@@ -25,7 +25,21 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(credentials) {
-    const { data: tokens } = await authApi.login(credentials);
+    const { data } = await authApi.login(credentials);
+    if (data.mfa_required) {
+      // Password was correct but the account has 2FA enabled -- no tokens
+      // yet. The caller (Login page) must collect a TOTP code and call
+      // completeMfaLogin with this mfa_token to actually finish logging in.
+      return { mfaRequired: true, mfaToken: data.mfa_token };
+    }
+    setTokens(data);
+    const { data: currentUser } = await authApi.fetchCurrentUser();
+    setUser(currentUser);
+    return { mfaRequired: false, user: currentUser };
+  }
+
+  async function completeMfaLogin(mfaToken, code) {
+    const { data: tokens } = await authApi.loginWith2FA(mfaToken, code);
     setTokens(tokens);
     const { data: currentUser } = await authApi.fetchCurrentUser();
     setUser(currentUser);
@@ -56,6 +70,7 @@ export function AuthProvider({ children }) {
     isLoading,
     isAuthenticated: Boolean(user),
     login,
+    completeMfaLogin,
     register,
     logout,
   };

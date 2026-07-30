@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.core.security import InvalidTokenError, decode_token
+from app.core.security import InvalidTokenError, decode_access_token_sid, decode_token
 from app.db.session import get_db
 from app.models.user import User, UserRole
 
@@ -51,6 +51,25 @@ def get_current_user_optional(
         return get_current_user(token=token, db=db)
     except HTTPException:
         return None
+
+
+def get_current_session_id(token: str | None = Depends(oauth2_scheme)) -> str:
+    """Used only by /auth/logout, to know which of a user's (possibly many,
+    across devices) sessions to revoke, without requiring the client to
+    resend its refresh token to a logout call. Separate from get_current_user
+    so that dependency's return type didn't need to change everywhere it's
+    already used across the app."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if token is None:
+        raise credentials_exception
+    try:
+        return decode_access_token_sid(token)
+    except InvalidTokenError as exc:
+        raise credentials_exception from exc
 
 
 def require_role(*roles: UserRole):

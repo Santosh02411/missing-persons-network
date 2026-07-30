@@ -13,3 +13,17 @@ export function listAuditLogs({ targetType, limit = 50, offset = 0 } = {}) {
     params: { target_type: targetType, limit, offset },
   });
 }
+
+export function listUsers({ role, isActive, limit = 50, offset = 0 } = {}) {
+  return apiClient.get("/admin/users", {
+    params: { role, is_active: isActive, limit, offset },
+  });
+}
+
+export function deactivateUser(userId) {
+  return apiClient.post(`/admin/users/${userId}/deactivate`);
+}
+
+export function reactivateUser(userId) {
+  return apiClient.post(`/admin/users/${userId}/reactivate`);
+}

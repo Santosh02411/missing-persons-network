@@ -3,6 +3,7 @@ import EmailVerificationBanner from "./components/EmailVerificationBanner";
 import Masthead from "./components/Masthead";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
+import AccountSecurity from "./pages/AccountSecurity";
 import AdminDashboard from "./pages/AdminDashboard";
 import AuthorityDashboard from "./pages/AuthorityDashboard";
 import CaseCreate from "./pages/CaseCreate";
@@ -36,6 +37,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <CaseCreate />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/account/security"
+                element={
+                  <ProtectedRoute>
+                    <AccountSecurity />
                   </ProtectedRoute>
                 }
               />
