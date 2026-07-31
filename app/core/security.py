@@ -11,6 +11,28 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 MFA_TOKEN_EXPIRE_MINUTES = 5
 
+# bcrypt's hard limit -- not configurable, a property of the algorithm
+# itself. Passwords longer than this in UTF-8 byte length crash
+# pwd_context.hash() with an unhandled ValueError if not caught earlier at
+# the API boundary (see schemas/user.py, schemas/token.py's field_validators).
+BCRYPT_MAX_BYTES = 72
+
+
+def validate_password_byte_length(password: str) -> str:
+    """Raises ValueError (which Pydantic turns into a clean 422) if the
+    password exceeds bcrypt's 72-byte limit. Byte length, not character
+    length -- a password with accented or non-Latin characters can hit 72
+    bytes well under 72 characters, since UTF-8 encodes many characters as
+    2-4 bytes each."""
+    byte_length = len(password.encode("utf-8"))
+    if byte_length > BCRYPT_MAX_BYTES:
+        raise ValueError(
+            f"Password is too long ({byte_length} bytes when encoded) -- "
+            f"the limit is {BCRYPT_MAX_BYTES} bytes. Some characters (accents, "
+            f"emoji, non-Latin scripts) count as more than one byte each."
+        )
+    return password
+
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)

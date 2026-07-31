@@ -1,10 +1,11 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
-
 from app.models.user import UserRole
 
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.core.security import validate_password_byte_length
 
 class UserCreate(BaseModel):
     """Registration payload. `role` defaults to reporter — becoming an
@@ -24,6 +25,10 @@ class UserCreate(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
     role: Literal["reporter", "authority"] = "reporter"
     org_name: str | None = Field(default=None, max_length=255)
+    @field_validator("password")
+    @classmethod
+    def _check_password_byte_length(cls, value: str) -> str:
+        return validate_password_byte_length(value)
 
 
 class UserRead(BaseModel):
