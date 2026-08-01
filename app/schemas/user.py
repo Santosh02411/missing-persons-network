@@ -1,11 +1,11 @@
 import uuid
 from typing import Literal
 
-from app.models.user import UserRole
-
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.core.security import validate_password_byte_length
+from app.models.user import UserRole
+
 
 class UserCreate(BaseModel):
     """Registration payload. `role` defaults to reporter — becoming an
@@ -25,9 +25,15 @@ class UserCreate(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
     role: Literal["reporter", "authority"] = "reporter"
     org_name: str | None = Field(default=None, max_length=255)
+
     @field_validator("password")
     @classmethod
     def _check_password_byte_length(cls, value: str) -> str:
+        # bcrypt (used for hashing, see core/security.py) hard-caps at 72
+        # BYTES, not characters -- a password with accented/non-Latin
+        # characters can hit that limit well under 72 characters. Without
+        # this check, a too-long password passes max_length=128 here but
+        # then crashes hash_password() with an unhandled 500 at registration.
         return validate_password_byte_length(value)
 
 
