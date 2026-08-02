@@ -35,11 +35,16 @@ class Sighting(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+<<<<<<< HEAD
     # values_callable required -- see app/models/user.py's role column for
     # the full explanation of why (SQLAlchemy defaults to enum member NAME,
     # not VALUE, which mismatches the lowercase native Postgres enum type).
     status: Mapped[SightingStatus] = mapped_column(
         Enum(SightingStatus, name="sighting_status", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+=======
+    status: Mapped[SightingStatus] = mapped_column(
+        Enum(SightingStatus, name="sighting_status"),
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
         default=SightingStatus.PENDING,
         nullable=False,
     )

@@ -19,6 +19,7 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
 
+<<<<<<< HEAD
     # values_callable is required here: SQLAlchemy's Enum type defaults to
     # using the Python enum member's NAME (e.g. "REPORTER") for the database
     # value, not its .value ("reporter") -- even though UserRole inherits
@@ -30,6 +31,10 @@ class User(Base):
         Enum(UserRole, name="user_role", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
         default=UserRole.REPORTER,
         nullable=False,
+=======
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role"), default=UserRole.REPORTER, nullable=False
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
     )
 
     # Authority accounts require admin approval before they can verify sightings

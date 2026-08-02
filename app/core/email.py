@@ -1,22 +1,42 @@
 import logging
+<<<<<<< HEAD
 import smtplib
 from email.message import EmailMessage
 
 from app.core.config import settings
+=======
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
 
 logger = logging.getLogger("app.email")
 
 
+<<<<<<< HEAD
 def _send_console(to: str, subject: str, body: str) -> None:
     """Default backend -- no setup required. Check the API container's logs
     (`docker compose logs -f api`) to see verification and password-reset
     links during local development."""
     logger.info(
         "=== EMAIL (console -- not actually sent) ===\nTo: %s\nSubject: %s\n\n%s\n=============================================",
+=======
+def send_email(to: str, subject: str, body: str) -> None:
+    """Stub email sender. This project has no SMTP/email provider configured,
+    so this just logs the message instead of sending it -- check the API
+    container's logs (`docker compose logs -f api`) to see verification and
+    password-reset links during local development.
+
+    Swap this out for a real provider (SendGrid, AWS SES, Postmark, etc.)
+    before this goes anywhere near real users. Every call site that needs to
+    send an email already goes through this one function, so it's the only
+    place that needs to change.
+    """
+    logger.info(
+        "=== EMAIL (stub — not actually sent) ===\nTo: %s\nSubject: %s\n\n%s\n=========================================",
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
         to,
         subject,
         body,
     )
+<<<<<<< HEAD
 
 
 def _send_smtp(to: str, subject: str, body: str) -> None:
@@ -59,3 +79,5 @@ def send_email(to: str, subject: str, body: str) -> None:
         _send_smtp(to, subject, body)
     else:
         _send_console(to, subject, body)
+=======
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30

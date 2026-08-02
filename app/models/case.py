@@ -34,6 +34,7 @@ class Case(Base):
     last_seen_address: Mapped[str] = mapped_column(String(500), nullable=False)
     last_seen_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)
 
+<<<<<<< HEAD
     # values_callable required -- see app/models/user.py's role column for
     # the full explanation of why (SQLAlchemy defaults to enum member NAME,
     # not VALUE, which mismatches the lowercase native Postgres enum type).
@@ -41,6 +42,10 @@ class Case(Base):
         Enum(CaseStatus, name="case_status", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
         default=CaseStatus.OPEN,
         nullable=False,
+=======
+    status: Mapped[CaseStatus] = mapped_column(
+        Enum(CaseStatus, name="case_status"), default=CaseStatus.OPEN, nullable=False
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
     )
 
     assigned_authority_id: Mapped[uuid.UUID | None] = mapped_column(

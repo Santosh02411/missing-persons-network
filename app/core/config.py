@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Frontend URL, used to build links in emails (verification, password reset)
     FRONTEND_URL: str = "http://localhost:5173"
 
+<<<<<<< HEAD
     # Email sending. "console" (default) just logs emails -- no setup needed,
     # safe for anyone cloning this project. Switch to "smtp" and fill in the
     # SMTP_* settings to actually send real emails (see .env.example for a
@@ -45,6 +46,8 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = ""
     SMTP_USE_TLS: bool = True
 
+=======
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
     # Photo uploads
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024  # 5MB

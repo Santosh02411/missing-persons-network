@@ -13,6 +13,7 @@ services:
       - mpn_pg_data:/var/lib/postgresql/data
       - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/20-init-test-db.sql:ro
     healthcheck:
+<<<<<<< HEAD
       # -h localhost forces this to check the TCP listener specifically
       # (rather than defaulting to the local Unix socket). That matters
       # because Postgres's official image runs its first-ever setup with
@@ -28,6 +29,12 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+=======
+      test: ["CMD-SHELL", "pg_isready -U mpn_user -d mpn_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
 
   redis:
     image: redis:7-alpine

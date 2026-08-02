@@ -1,7 +1,11 @@
 import uuid
 from datetime import datetime
 
+<<<<<<< HEAD
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+=======
+from pydantic import BaseModel, ConfigDict, Field
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
 
 from app.models.case import CaseStatus
 from app.schemas.geo import GeoPoint
@@ -50,6 +54,7 @@ class CaseRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+<<<<<<< HEAD
     @field_validator("last_seen_location", mode="before")
     @classmethod
     def _convert_geography(cls, value):
@@ -65,6 +70,8 @@ class CaseRead(BaseModel):
             return value  # already {lat, lng} -- e.g. round-tripped in tests
         return from_geography(value)
 
+=======
+>>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
 
 class CaseListItem(BaseModel):
     """Slimmer shape for list views — avoids shipping the full description to a browse page."""
