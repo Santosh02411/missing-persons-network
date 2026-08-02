@@ -1,6 +1,5 @@
 __pycache__/
 *.pyc
-.env
 .venv/
 venv/
 *.egg-info/
@@ -11,3 +10,5 @@ dist/
 *.log
 uploads/*
 !uploads/.gitkeep
+
+.env
