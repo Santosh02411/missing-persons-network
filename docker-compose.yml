@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: mpn_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mpn_user
+      POSTGRES_PASSWORD: mpn_pass
+      POSTGRES_DB: mpn_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - mpn_pg_data:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/20-init-test-db.sql:ro
+    healthcheck:
+      # -h localhost forces this to check the TCP listener specifically
+      # (rather than defaulting to the local Unix socket). That matters
+      # because Postgres's official image runs its first-ever setup with
+      # TCP networking disabled (Unix socket only) as a security measure,
+      # then does a full restart with TCP enabled once setup finishes. A
+      # bare `pg_isready` (socket-based) reports "healthy" during that
+      # Unix-socket-only phase -- which is exactly the false-positive that
+      # let docker-compose's `--wait`/`depends_on: service_healthy` release
+      # control to the api container before Postgres could actually accept
+      # its TCP connection, on every single fresh-volume startup.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U mpn_user -d mpn_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: mpn_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: mpn_api
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/code
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  mpn_pg_data:

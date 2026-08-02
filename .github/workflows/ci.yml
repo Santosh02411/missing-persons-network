@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: mpn_user
+          POSTGRES_PASSWORD: mpn_pass
+          POSTGRES_DB: mpn_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U mpn_user -d mpn_db"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: postgresql+psycopg2://mpn_user:mpn_pass@localhost:5432/mpn_db
+      TEST_DATABASE_URL: postgresql+psycopg2://mpn_user:mpn_pass@localhost:5432/mpn_test_db
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-only-secret-not-for-production-use
+      ENVIRONMENT: test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check app
+
+      # GitHub-hosted Actions "service" containers don't support mounting
+      # docker-entrypoint-initdb.d scripts the way docker-compose.yml does
+      # locally (see scripts/init-test-db.sql), so the test database and its
+      # PostGIS extension are created explicitly here instead.
+      - name: Create test database
+        run: |
+          PGPASSWORD=mpn_pass psql -h localhost -U mpn_user -d mpn_db -c "CREATE DATABASE mpn_test_db;"
+          PGPASSWORD=mpn_pass psql -h localhost -U mpn_user -d mpn_test_db -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+
+      - name: Run tests with coverage
+        run: pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=70
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
