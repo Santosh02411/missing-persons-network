@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { assignedToMe } from "../api/cases";
+import { approveCase, assignedToMe, pendingApprovalCases } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { pendingSightings, reviewSighting } from "../api/sightings";
 import StatusBadge from "../components/StatusBadge";
@@ -8,6 +8,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function AuthorityDashboard() {
   const { user } = useAuth();
+  const [pendingCases, setPendingCases] = useState([]);
   const [queue, setQueue] = useState([]);
   const [assignedCases, setAssignedCases] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,10 +21,12 @@ export default function AuthorityDashboard() {
     setIsLoading(true);
     setError(null);
     try {
-      const [{ data: sightings }, { data: cases }] = await Promise.all([
+      const [{ data: casesToApprove }, { data: sightings }, { data: cases }] = await Promise.all([
+        pendingApprovalCases(),
         pendingSightings(),
         assignedToMe(),
       ]);
+      setPendingCases(casesToApprove);
       setQueue(sightings);
       setAssignedCases(cases);
     } catch (err) {
@@ -37,6 +40,19 @@ export default function AuthorityDashboard() {
     if (!isUnverifiedAuthority) load();
     else setIsLoading(false);
   }, [isUnverifiedAuthority]);
+
+  async function handleApproveCase(caseId) {
+    setBusyId(caseId);
+    try {
+      const { data: approved } = await approveCase(caseId);
+      setPendingCases((prev) => prev.filter((c) => c.id !== caseId));
+      setAssignedCases((prev) => [approved, ...prev]);
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't approve that case."));
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function handleReview(sightingId, status) {
     setBusyId(sightingId);
@@ -73,6 +89,41 @@ export default function AuthorityDashboard() {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      <section style={{ marginBottom: 40 }}>
+        <div className="section-heading">
+          <h3 style={{ margin: 0 }}>Cases awaiting approval ({pendingCases.length})</h3>
+        </div>
+        <p className="field-hint" style={{ marginTop: -8 }}>
+          Newly filed cases aren't public until approved. Approving also assigns the case to you.
+        </p>
+        {pendingCases.length === 0 ? (
+          <p className="field-hint">Nothing waiting for approval right now.</p>
+        ) : (
+          <div className="sighting-list">
+            {pendingCases.map((c) => (
+              <div key={c.id} className="sighting-item">
+                <div className="sighting-item-header">
+                  <div>
+                    <StatusBadge status={c.status} /> <Link to={`/cases/${c.id}`}>{c.name}</Link>
+                  </div>
+                  <span className="sighting-item-meta">
+                    {new Date(c.created_at).toLocaleString()}
+                  </span>
+                </div>
+                <div className="field-hint" style={{ marginBottom: 8 }}>{c.last_seen_address}</div>
+                <button
+                  className="btn btn-primary"
+                  disabled={busyId === c.id}
+                  onClick={() => handleApproveCase(c.id)}
+                >
+                  Approve
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section style={{ marginBottom: 40 }}>
         <div className="section-heading">
@@ -123,8 +174,7 @@ export default function AuthorityDashboard() {
         </div>
         {assignedCases.length === 0 ? (
           <p className="field-hint">
-            You haven't claimed any cases yet — open a case from the{" "}
-            <Link to="/">case list</Link> and claim it there.
+            You haven't approved or claimed any cases yet.
           </p>
         ) : (
           <div className="sighting-list">

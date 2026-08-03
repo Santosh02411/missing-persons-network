@@ -1,4 +1,5 @@
 const LABELS = {
+  pending_review: "Awaiting approval",
   open: "Open",
   lead_found: "Lead found",
   resolved: "Resolved",

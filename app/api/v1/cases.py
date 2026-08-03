@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.cache import CASES_LIST_TTL_SECONDS, cases_list_cache_key
-from app.core.deps import get_current_user, require_verified_authority_or_admin
+from app.core.deps import get_current_user, get_current_user_optional, require_verified_authority_or_admin
 from app.core.redis_client import redis_client
 from app.db.session import get_db
 from app.models.case import CaseStatus
@@ -24,6 +24,9 @@ def create_case(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CaseRead:
+    """New cases start as pending_review -- not publicly listed until an
+    authority approves them (see POST /{case_id}/approve). The reporter can
+    still view their own case's detail page while it's pending."""
     case = case_service.create_case(db, payload, reporter=current_user)
     return CaseRead.model_validate(case)
 
@@ -36,6 +39,7 @@ def list_cases(
     db: Session = Depends(get_db),
 ) -> list[CaseListItem]:
     """Public -- browse cases. No auth required, matches FR-5.
+    Never includes pending_review cases -- see case_service.list_cases().
 
     Cached in Redis for CASES_LIST_TTL_SECONDS. The cache key includes a
     version number (see core/cache.py) that's bumped on any case write, so
@@ -84,10 +88,30 @@ def get_assigned_cases(
     return [CaseRead.model_validate(c) for c in cases]
 
 
+@router.get("/pending-approval", response_model=list[CaseRead])
+def get_pending_approval_cases(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> list[CaseRead]:
+    """Backs the authority dashboard's approval queue -- newly filed cases
+    waiting to be reviewed before they go public. Registered before
+    /{case_id} for the same routing-order reason as /nearby above."""
+    cases = case_service.list_pending_approval_cases(db, limit, offset)
+    return [CaseRead.model_validate(c) for c in cases]
+
+
 @router.get("/{case_id}", response_model=CaseRead)
-def get_case(case_id: uuid.UUID, db: Session = Depends(get_db)) -> CaseRead:
-    """Public -- case detail. No auth required, matches FR-5."""
-    case = case_service.get_case_or_404(db, case_id)
+def get_case(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> CaseRead:
+    """Public for approved cases. A pending_review case is only visible to
+    the reporter who filed it or an authority/admin -- see
+    case_service.get_case_or_404's visibility check."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
     return CaseRead.model_validate(case)
 
 
@@ -100,8 +124,22 @@ def update_case(
 ) -> CaseRead:
     """Row-level check inside case_service.update_case: reporter (owner),
     assigned authority, or admin only."""
-    case = case_service.get_case_or_404(db, case_id)
+    case = case_service.get_case_or_404(db, case_id, current_user)
     updated = case_service.update_case(db, case, payload, current_user)
+    return CaseRead.model_validate(updated)
+
+
+@router.post("/{case_id}/approve", response_model=CaseRead)
+def approve_case(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> CaseRead:
+    """A verified authority (or admin) approves a newly-filed case, making it
+    publicly visible and simultaneously claiming it -- the reviewing
+    authority becomes the assigned one."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    updated = case_service.approve_case(db, case, actor=current_user)
     return CaseRead.model_validate(updated)
 
 
@@ -111,10 +149,10 @@ def claim_case(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_verified_authority_or_admin),
 ) -> CaseRead:
-    """A verified authority takes ownership of a case. FR-3. Restricted to
-    verified authority/admin roles -- an unverified authority account can't
-    claim cases yet."""
-    case = case_service.get_case_or_404(db, case_id)
+    """A verified authority takes ownership of an already-approved,
+    unassigned case. FR-3. Restricted to verified authority/admin roles --
+    an unverified authority account can't claim cases yet."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
     updated = case_service.claim_case(db, case, actor=current_user)
     return CaseRead.model_validate(updated)
 
@@ -128,7 +166,8 @@ def update_case_status(
 ) -> CaseRead:
     """Restricted to verified authority/admin at the route level; further
     restricted to *this case's* assigned authority (or admin) at the row
-    level inside case_service.update_case_status."""
-    case = case_service.get_case_or_404(db, case_id)
+    level inside case_service.update_case_status. This is how an authority
+    closes (resolves) a case once it's solved."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
     updated = case_service.update_case_status(db, case, payload.status, actor=current_user)
     return CaseRead.model_validate(updated)

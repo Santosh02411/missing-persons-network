@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { claimCase, getCase, updateCaseStatus } from "../api/cases";
+import { approveCase, claimCase, getCase, updateCaseStatus } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { listSightingsForCase } from "../api/sightings";
 import SightingForm from "../components/SightingForm";
@@ -39,6 +39,19 @@ export default function CaseDetail() {
     loadCase();
   }, [loadCase]);
 
+  async function handleApproveCase() {
+    setActionError(null);
+    setActionBusy(true);
+    try {
+      const { data } = await approveCase(caseId);
+      setCaseItem(data);
+    } catch (err) {
+      setActionError(extractErrorMessage(err, "Couldn't approve this case."));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   async function handleClaim() {
     setActionError(null);
     setActionBusy(true);
@@ -73,8 +86,10 @@ export default function CaseDetail() {
   const isAssignedAuthority =
     isAuthenticated && user.role === "authority" && caseItem.assigned_authority_id === user.id;
   const isAdmin = isAuthenticated && user.role === "admin";
+  const isPendingReview = caseItem.status === "pending_review";
+  const canApprove = isAuthorityOrAdmin && isPendingReview && user.is_verified !== false;
   const canClaim =
-    isAuthorityOrAdmin && !caseItem.assigned_authority_id && user.is_verified !== false;
+    isAuthorityOrAdmin && !isPendingReview && !caseItem.assigned_authority_id && user.is_verified !== false;
   const canChangeStatus = isAssignedAuthority || isAdmin;
 
   return (
@@ -109,6 +124,18 @@ export default function CaseDetail() {
           <div>{caseItem.description}</div>
 
           {actionError && <div className="alert alert-error" style={{ marginTop: 16 }}>{actionError}</div>}
+
+          {isPendingReview && !isAuthorityOrAdmin && (
+            <p className="field-hint" style={{ marginTop: 16 }}>
+              This case is awaiting authority approval before it becomes public.
+            </p>
+          )}
+
+          {canApprove && (
+            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleApproveCase} disabled={actionBusy}>
+              Approve this case
+            </button>
+          )}
 
           {canClaim && (
             <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleClaim} disabled={actionBusy}>

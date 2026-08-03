@@ -1,11 +1,7 @@
 import uuid
 from datetime import datetime
 
-<<<<<<< HEAD
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-=======
-from pydantic import BaseModel, ConfigDict, Field
->>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
 
 from app.models.sighting import SightingStatus
 from app.schemas.geo import GeoPoint
@@ -40,7 +36,6 @@ class SightingRead(BaseModel):
     reviewed_at: datetime | None
     created_at: datetime
 
-<<<<<<< HEAD
     @field_validator("location", mode="before")
     @classmethod
     def _convert_geography(cls, value):
@@ -53,8 +48,6 @@ class SightingRead(BaseModel):
             return value
         return from_geography(value)
 
-=======
->>>>>>> 0a84c8b8037ce65b90f512ff6a732d74ee3d7e30
 
 class SightingQueueItem(SightingRead):
     """SightingRead plus the parent case's name -- used only by the pending-

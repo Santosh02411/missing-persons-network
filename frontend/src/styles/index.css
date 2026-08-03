@@ -295,6 +295,10 @@ main {
   background: var(--color-moss-bg);
   color: var(--color-moss);
 }
+.status-pending_review {
+  background: var(--color-mist);
+  color: var(--color-graytext);
+}
 .status-pending {
   background: var(--color-mist);
   color: var(--color-graytext);

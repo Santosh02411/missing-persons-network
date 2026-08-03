@@ -28,6 +28,14 @@ export function assignedToMe() {
   return apiClient.get("/cases/assigned-to-me");
 }
 
+export function pendingApprovalCases() {
+  return apiClient.get("/cases/pending-approval");
+}
+
+export function approveCase(caseId) {
+  return apiClient.post(`/cases/${caseId}/approve`);
+}
+
 export function nearbyCases({ lat, lng, radius_km = 10, limit = 50 }) {
   return apiClient.get("/cases/nearby", { params: { lat, lng, radius_km, limit } });
 }
