@@ -1,22 +1,32 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { forgotPassword } from "../api/auth";
+import { extractErrorMessage } from "../api/client";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setIsSubmitting(true);
+    setError(null);
     try {
       await forgotPassword(email);
-    } finally {
-      // Always show the same message, whether or not the email exists --
-      // matches the backend's response, which never reveals that either.
-      setIsSubmitting(false);
+      // The backend intentionally returns the same generic response whether
+      // or not this email is registered (prevents account enumeration) --
+      // that's the ONLY thing that gets this generic "check your email"
+      // message. A genuine request failure (network error, CORS, a 500) is
+      // a different thing and should actually be shown, not silently
+      // treated as if it worked -- this used to always show "success" here
+      // even when the request itself never reached the backend at all.
       setSubmitted(true);
+    } catch (err) {
+      setError(extractErrorMessage(err, "Something went wrong sending that. Please try again."));
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -31,6 +41,7 @@ export default function ForgotPassword() {
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
+            {error && <div className="alert alert-error">{error}</div>}
             <p className="field-hint" style={{ marginTop: -8, marginBottom: 16 }}>
               Enter your email and we'll send you a link to reset your password.
             </p>
