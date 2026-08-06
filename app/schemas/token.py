@@ -41,14 +41,18 @@ class LoginResult(BaseModel):
     """Response shape for POST /auth/login. Two possible outcomes in one
     schema (rather than a Union) for simpler OpenAPI docs and frontend
     handling: either tokens are issued directly, or -- if the account has 2FA
-    enabled -- mfa_required=True and mfa_token must be paired with a TOTP
-    code at POST /auth/2fa/login to actually get tokens."""
+    enabled -- mfa_required=True and mfa_token must be paired with a code at
+    POST /auth/2fa/login to actually get tokens. mfa_method tells the
+    frontend which prompt to show ("enter the code from your app" vs "enter
+    the code we just emailed you") -- for email_otp, the code has already
+    been sent by the time this response comes back."""
 
     access_token: str | None = None
     refresh_token: str | None = None
     token_type: str = "bearer"
     mfa_required: bool = False
     mfa_token: str | None = None
+    mfa_method: str | None = None  # "totp" | "email_otp"
 
 
 class TwoFactorSetupResponse(BaseModel):

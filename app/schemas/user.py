@@ -48,6 +48,7 @@ class UserRead(BaseModel):
     is_active: bool
     email_verified: bool
     totp_enabled: bool
+    email_otp_enabled: bool
     org_name: str | None = None
 
 

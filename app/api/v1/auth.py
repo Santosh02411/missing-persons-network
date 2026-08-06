@@ -27,8 +27,10 @@ from app.schemas.token import (
 from app.schemas.user import UserCreate, UserLogin, UserRead
 from app.services.auth_service import (
     authenticate_user,
+    confirm_email_otp_setup,
     confirm_totp_setup,
     create_session_id,
+    disable_email_otp,
     disable_totp,
     is_refresh_jti_valid,
     list_sessions,
@@ -37,9 +39,12 @@ from app.services.auth_service import (
     reset_password,
     revoke_all_sessions,
     revoke_session,
+    send_login_otp,
     send_verification_email,
+    start_email_otp_setup,
     start_totp_setup,
     store_refresh_jti,
+    verify_login_otp,
 )
 
 router = APIRouter()
@@ -78,14 +83,23 @@ def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)) -
     """Locked out for LOGIN_LOCKOUT_SECONDS after LOGIN_FAILURE_THRESHOLD
     consecutive failures for this email (429 + Retry-After).
 
-    If the account has two-factor auth enabled, this does NOT issue tokens
-    directly -- it returns {mfa_required: true, mfa_token} instead, and the
-    caller must complete login at POST /auth/2fa/login with that mfa_token
-    plus a valid TOTP code."""
+    If the account has two-factor auth enabled (either method), this does
+    NOT issue tokens directly -- it returns {mfa_required: true, mfa_token,
+    mfa_method}. For mfa_method="totp" the caller enters a code from their
+    authenticator app; for "email_otp" a fresh code has already been emailed
+    by this call, and the caller enters that. Either way, completing login
+    happens at POST /auth/2fa/login with that mfa_token plus the code."""
     user = authenticate_user(db, payload.email, payload.password)
 
     if user.totp_enabled:
-        return LoginResult(mfa_required=True, mfa_token=create_mfa_token(user.id))
+        return LoginResult(
+            mfa_required=True, mfa_token=create_mfa_token(user.id), mfa_method="totp"
+        )
+    if user.email_otp_enabled:
+        send_login_otp(user)
+        return LoginResult(
+            mfa_required=True, mfa_token=create_mfa_token(user.id), mfa_method="email_otp"
+        )
 
     user_agent = request.headers.get("user-agent")
     tokens = _issue_tokens_new_session(user.id, user_agent)
@@ -98,7 +112,8 @@ def login_with_2fa(
 ) -> Token:
     """Completes login for a 2FA-enabled account: the mfa_token proves the
     password check already passed (see /auth/login), and the code proves
-    possession of the authenticator app."""
+    possession of the authenticator app or the registered email inbox,
+    whichever method is enabled on the account."""
     from app.core.totp import verify_totp_code
 
     invalid = HTTPException(
@@ -113,7 +128,14 @@ def login_with_2fa(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise invalid
-    if not user.totp_enabled or not user.totp_secret or not verify_totp_code(user.totp_secret, payload.code):
+
+    if user.totp_enabled:
+        if not user.totp_secret or not verify_totp_code(user.totp_secret, payload.code):
+            raise invalid
+    elif user.email_otp_enabled:
+        if not verify_login_otp(user.id, payload.code):
+            raise invalid
+    else:
         raise invalid
 
     user_agent = request.headers.get("user-agent")
@@ -258,3 +280,35 @@ def disable_2fa_route(
     """Requires a current, valid TOTP code to disable -- so a stolen access
     token alone isn't enough to turn off 2FA on an account."""
     return disable_totp(db, current_user, payload.code)
+
+
+@router.post("/2fa/email-otp/setup", status_code=status.HTTP_202_ACCEPTED)
+def setup_email_otp(
+    current_user: User = Depends(require_role(UserRole.AUTHORITY, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Alternative to the authenticator-app method above: sends a
+    confirmation code to the account's email instead of a QR code. Restricted
+    to authority/admin the same way TOTP setup is."""
+    start_email_otp_setup(db, current_user)
+    return {"detail": "A confirmation code has been sent to your email."}
+
+
+@router.post("/2fa/email-otp/verify", response_model=UserRead)
+def verify_email_otp_setup(
+    payload: TwoFactorCodeRequest,
+    current_user: User = Depends(require_role(UserRole.AUTHORITY, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+) -> User:
+    """Confirms the emailed code, enabling email_otp_enabled."""
+    return confirm_email_otp_setup(db, current_user, payload.code)
+
+
+@router.post("/2fa/email-otp/disable", response_model=UserRead)
+def disable_email_otp_route(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    """No code challenge here (unlike TOTP disable) -- there's no standing
+    secret proving anything, so being authenticated is sufficient."""
+    return disable_email_otp(db, current_user)

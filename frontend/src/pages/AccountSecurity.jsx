@@ -4,10 +4,13 @@ import { useNavigate } from "react-router-dom";
 import {
   deleteSession,
   disable2FA,
+  disableEmailOtp,
   listSessions,
   logoutAll,
   setup2FA,
+  setupEmailOtp,
   verify2FASetup,
+  verifyEmailOtpSetup,
 } from "../api/auth";
 import { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
@@ -18,13 +21,20 @@ export default function AccountSecurity() {
   const [sessions, setSessions] = useState([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  // 2FA setup flow state
+  // TOTP (authenticator app) setup flow state
   const [setupData, setSetupData] = useState(null); // {secret, otpauth_uri}
   const [setupCode, setSetupCode] = useState("");
   const [disableCode, setDisableCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(null);
+
+  // Email OTP setup flow state
+  const [emailOtpPending, setEmailOtpPending] = useState(false);
+  const [emailOtpCode, setEmailOtpCode] = useState("");
+
+  // Which method to offer setting up when neither is enabled yet
+  const [chosenMethod, setChosenMethod] = useState(null); // "totp" | "email_otp"
 
   async function loadSessions() {
     setIsLoadingSessions(true);
@@ -43,8 +53,10 @@ export default function AccountSecurity() {
   }, []);
 
   const canUse2FA = user.role === "authority" || user.role === "admin";
+  const anyMethodEnabled = user.totp_enabled || user.email_otp_enabled;
 
-  async function handleStartSetup() {
+  // --- TOTP handlers ---
+  async function handleStartTotpSetup() {
     setError(null);
     setBusy(true);
     try {
@@ -57,16 +69,14 @@ export default function AccountSecurity() {
     }
   }
 
-  async function handleConfirmSetup(e) {
+  async function handleConfirmTotpSetup(e) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
       await verify2FASetup(setupCode);
-      setSetupData(null);
-      setSetupCode("");
       setMessage("Two-factor authentication is now enabled on your account.");
-      window.location.reload(); // simplest way to refresh user.totp_enabled from /auth/me
+      window.location.reload();
     } catch (err) {
       setError(extractErrorMessage(err, "Incorrect code. Check your authenticator app."));
     } finally {
@@ -74,17 +84,60 @@ export default function AccountSecurity() {
     }
   }
 
-  async function handleDisable(e) {
+  async function handleDisableTotp(e) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
       await disable2FA(disableCode);
-      setDisableCode("");
       setMessage("Two-factor authentication has been disabled.");
       window.location.reload();
     } catch (err) {
       setError(extractErrorMessage(err, "Incorrect code."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // --- Email OTP handlers ---
+  async function handleStartEmailOtpSetup() {
+    setError(null);
+    setBusy(true);
+    try {
+      await setupEmailOtp();
+      setEmailOtpPending(true);
+      setMessage("A confirmation code has been sent to your email.");
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't start email-based two-factor setup."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirmEmailOtpSetup(e) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await verifyEmailOtpSetup(emailOtpCode);
+      setMessage("Email-based two-factor authentication is now enabled.");
+      window.location.reload();
+    } catch (err) {
+      setError(extractErrorMessage(err, "Incorrect or expired code."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDisableEmailOtp() {
+    setError(null);
+    setBusy(true);
+    try {
+      await disableEmailOtp();
+      setMessage("Email-based two-factor authentication has been disabled.");
+      window.location.reload();
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't disable email-based two-factor authentication."));
     } finally {
       setBusy(false);
     }
@@ -102,7 +155,7 @@ export default function AccountSecurity() {
 
   async function handleLogoutAll() {
     await logoutAll();
-    await logout(); // also clears local tokens/state for the current tab
+    await logout();
     navigate("/");
   }
 
@@ -126,10 +179,12 @@ export default function AccountSecurity() {
           </p>
         ) : user.totp_enabled ? (
           <div className="form-card" style={{ maxWidth: 420, margin: 0 }}>
-            <p>Two-factor authentication is <strong>enabled</strong> on your account.</p>
-            <form onSubmit={handleDisable}>
+            <p>
+              Two-factor authentication is <strong>enabled</strong> (authenticator app method).
+            </p>
+            <form onSubmit={handleDisableTotp}>
               <div className="field">
-                <label htmlFor="disable_code">Enter a code to disable it</label>
+                <label htmlFor="disable_code">Enter a code from your app to disable it</label>
                 <input
                   id="disable_code"
                   inputMode="numeric"
@@ -144,11 +199,22 @@ export default function AccountSecurity() {
               </button>
             </form>
           </div>
+        ) : user.email_otp_enabled ? (
+          <div className="form-card" style={{ maxWidth: 420, margin: 0 }}>
+            <p>
+              Two-factor authentication is <strong>enabled</strong> (email code method). A code
+              will be emailed to you at every login.
+            </p>
+            <button className="btn btn-danger" onClick={handleDisableEmailOtp} disabled={busy}>
+              Disable two-factor authentication
+            </button>
+          </div>
         ) : setupData ? (
           <div className="form-card" style={{ maxWidth: 420, margin: 0 }}>
             <p className="field-hint" style={{ marginTop: 0 }}>
-              Scan this with your authenticator app (Google Authenticator, Authy, 1Password,
-              etc.), then enter the 6-digit code it shows.
+              Open your authenticator app (Google Authenticator, Authy, 1Password, etc.), scan
+              this QR code to add the account, then type the 6-digit code <strong>the app
+              shows you</strong> (not shown on this page) into the box below.
             </p>
             <div style={{ background: "#fff", padding: 16, display: "inline-block", marginBottom: 12 }}>
               <QRCodeSVG value={setupData.otpauth_uri} size={180} />
@@ -156,9 +222,9 @@ export default function AccountSecurity() {
             <p className="field-hint">
               Can't scan? Enter this key manually: <code>{setupData.secret}</code>
             </p>
-            <form onSubmit={handleConfirmSetup}>
+            <form onSubmit={handleConfirmTotpSetup}>
               <div className="field">
-                <label htmlFor="setup_code">Code from your app</label>
+                <label htmlFor="setup_code">6-digit code from your authenticator app</label>
                 <input
                   id="setup_code"
                   inputMode="numeric"
@@ -173,16 +239,58 @@ export default function AccountSecurity() {
                 Confirm and enable
               </button>
             </form>
+            <button
+              className="btn btn-secondary"
+              style={{ marginTop: 8 }}
+              onClick={() => { setSetupData(null); setChosenMethod(null); }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : emailOtpPending ? (
+          <div className="form-card" style={{ maxWidth: 420, margin: 0 }}>
+            <p className="field-hint" style={{ marginTop: 0 }}>
+              Check your email for a 6-digit confirmation code and enter it below.
+            </p>
+            <form onSubmit={handleConfirmEmailOtpSetup}>
+              <div className="field">
+                <label htmlFor="email_otp_code">Code from your email</label>
+                <input
+                  id="email_otp_code"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  value={emailOtpCode}
+                  onChange={(e) => setEmailOtpCode(e.target.value)}
+                />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={busy}>
+                Confirm and enable
+              </button>
+            </form>
+            <button
+              className="btn btn-secondary"
+              style={{ marginTop: 8 }}
+              onClick={() => { setEmailOtpPending(false); setChosenMethod(null); }}
+            >
+              Cancel
+            </button>
           </div>
         ) : (
           <div>
             <p className="field-hint">
-              Not enabled. Two-factor auth adds a code from your phone on top of your password
-              at login.
+              Not enabled. Two-factor auth adds a second step at login, on top of your password.
+              Choose a method:
             </p>
-            <button className="btn btn-primary" onClick={handleStartSetup} disabled={busy}>
-              Set up two-factor authentication
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-primary" onClick={handleStartTotpSetup} disabled={busy}>
+                Use an authenticator app (scan a QR code)
+              </button>
+              <button className="btn btn-secondary" onClick={handleStartEmailOtpSetup} disabled={busy}>
+                Email me a code at login instead
+              </button>
+            </div>
           </div>
         )}
       </section>

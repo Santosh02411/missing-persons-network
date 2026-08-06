@@ -48,6 +48,18 @@ export function disable2FA(code) {
   return apiClient.post("/auth/2fa/disable", { code });
 }
 
+export function setupEmailOtp() {
+  return apiClient.post("/auth/2fa/email-otp/setup");
+}
+
+export function verifyEmailOtpSetup(code) {
+  return apiClient.post("/auth/2fa/email-otp/verify", { code });
+}
+
+export function disableEmailOtp() {
+  return apiClient.post("/auth/2fa/email-otp/disable");
+}
+
 export function listSessions() {
   return apiClient.get("/auth/sessions");
 }

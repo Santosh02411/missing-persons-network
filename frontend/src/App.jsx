@@ -9,9 +9,11 @@ import AuthorityDashboard from "./pages/AuthorityDashboard";
 import CaseCreate from "./pages/CaseCreate";
 import CaseDetail from "./pages/CaseDetail";
 import CaseList from "./pages/CaseList";
+import CitizenDashboard from "./pages/CitizenDashboard";
 import ForgotPassword from "./pages/ForgotPassword";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Profile from "./pages/Profile";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -25,13 +27,27 @@ export default function App() {
           <EmailVerificationBanner />
           <main>
             <Routes>
-              <Route path="/" element={<CaseList />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <CaseList />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route path="/cases/:caseId" element={<CaseDetail />} />
+              <Route
+                path="/cases/:caseId"
+                element={
+                  <ProtectedRoute>
+                    <CaseDetail />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/cases/new"
                 element={
@@ -41,10 +57,26 @@ export default function App() {
                 }
               />
               <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/account/security"
                 element={
                   <ProtectedRoute>
                     <AccountSecurity />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/citizen"
+                element={
+                  <ProtectedRoute allowedRoles={["reporter"]}>
+                    <CitizenDashboard />
                   </ProtectedRoute>
                 }
               />

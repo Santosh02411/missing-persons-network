@@ -3,9 +3,9 @@ const LABELS = {
   open: "Open",
   lead_found: "Lead found",
   resolved: "Resolved",
+  dismissed: "Dismissed",
   pending: "Pending review",
   verified: "Verified",
-  dismissed: "Dismissed",
 };
 
 export default function StatusBadge({ status }) {

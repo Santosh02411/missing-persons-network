@@ -28,9 +28,10 @@ export function AuthProvider({ children }) {
     const { data } = await authApi.login(credentials);
     if (data.mfa_required) {
       // Password was correct but the account has 2FA enabled -- no tokens
-      // yet. The caller (Login page) must collect a TOTP code and call
+      // yet. The caller (Login page) must collect a code and call
       // completeMfaLogin with this mfa_token to actually finish logging in.
-      return { mfaRequired: true, mfaToken: data.mfa_token };
+      // mfa_method tells it which prompt to show ("app" vs "emailed code").
+      return { mfaRequired: true, mfaToken: data.mfa_token, mfaMethod: data.mfa_method };
     }
     setTokens(data);
     const { data: currentUser } = await authApi.fetchCurrentUser();

@@ -1,4 +1,5 @@
 import json
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -22,6 +23,10 @@ EMAIL_VERIFY_PREFIX = "email_verify"
 PASSWORD_RESET_PREFIX = "pwd_reset"
 PASSWORD_RESET_TTL_SECONDS = 60 * 60  # 1 hour
 EMAIL_VERIFY_TTL_SECONDS = 24 * 60 * 60  # 24 hours
+LOGIN_OTP_PREFIX = "login_otp"  # a fresh code sent at each email-OTP login
+LOGIN_OTP_TTL_SECONDS = 5 * 60
+SETUP_OTP_PREFIX = "email_otp_setup"  # confirms the person can receive email before enabling
+SETUP_OTP_TTL_SECONDS = 10 * 60
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
@@ -373,3 +378,97 @@ def disable_totp(db: Session, user: User, code: str) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+# ---------------------------------------------------------------------------
+# Two-factor auth: email OTP (alternative to TOTP)
+# ---------------------------------------------------------------------------
+# No secret is stored on the user for this method -- each code is randomly
+# generated, emailed, and checked against a short-lived Redis entry, both
+# when setting the method up and at every subsequent login.
+
+
+def _generate_otp_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def start_email_otp_setup(db: Session, user: User) -> None:
+    """Sends a confirmation code to the account's email -- proves the person
+    setting this up can actually receive mail there before enabling it."""
+    if user.email_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email OTP is already enabled. Disable it first to reconfigure.",
+        )
+    if user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have authenticator-app 2FA enabled. Disable it first to switch methods.",
+        )
+    code = _generate_otp_code()
+    redis_client.set(f"{SETUP_OTP_PREFIX}:{user.id}", code, ex=SETUP_OTP_TTL_SECONDS)
+    send_email(
+        to=user.email,
+        subject="Confirm email-based two-factor auth — Reunification Network",
+        body=(
+            f"Hi {user.full_name},\n\nYour confirmation code is: {code}\n\n"
+            f"Enter this on the site to finish enabling email-based two-factor "
+            f"authentication. This code expires in 10 minutes."
+        ),
+    )
+
+
+def confirm_email_otp_setup(db: Session, user: User, code: str) -> User:
+    key = f"{SETUP_OTP_PREFIX}:{user.id}"
+    stored = redis_client.get(key)
+    if stored is None or stored != code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect or expired code. Request a new one and try again.",
+        )
+    redis_client.delete(key)
+    user.email_otp_enabled = True
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def disable_email_otp(db: Session, user: User) -> User:
+    """No code challenge required to disable -- unlike TOTP disable, there's
+    no standing secret to prove possession of; the person is already
+    authenticated with a valid access token, which is enough here."""
+    if not user.email_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email OTP is not enabled on this account.",
+        )
+    user.email_otp_enabled = False
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def send_login_otp(user: User) -> None:
+    """Called from the /auth/login route when a user with email_otp_enabled
+    passes the password check -- sends the code they'll need for
+    /auth/2fa/login."""
+    code = _generate_otp_code()
+    redis_client.set(f"{LOGIN_OTP_PREFIX}:{user.id}", code, ex=LOGIN_OTP_TTL_SECONDS)
+    send_email(
+        to=user.email,
+        subject="Your login code — Reunification Network",
+        body=(
+            f"Hi {user.full_name},\n\nYour login code is: {code}\n\n"
+            f"Enter this to finish logging in. This code expires in 5 minutes. "
+            f"If this wasn't you, you can ignore this email."
+        ),
+    )
+
+
+def verify_login_otp(user_id, code: str) -> bool:
+    key = f"{LOGIN_OTP_PREFIX}:{user_id}"
+    stored = redis_client.get(key)
+    if stored is None or stored != code:
+        return False
+    redis_client.delete(key)  # single use
+    return True

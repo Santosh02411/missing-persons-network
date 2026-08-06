@@ -64,6 +64,17 @@ def list_sightings_for_case(db: Session, case_id: uuid.UUID) -> list[Sighting]:
     return list(db.scalars(stmt))
 
 
+def list_my_sightings(db: Session, user_id) -> list[Sighting]:
+    """All sightings reported by this user -- backs the citizen dashboard's
+    "my sightings" list."""
+    stmt = (
+        select(Sighting)
+        .where(Sighting.reported_by == user_id)
+        .order_by(Sighting.created_at.desc())
+    )
+    return list(db.scalars(stmt))
+
+
 def review_sighting(
     db: Session, sighting: Sighting, new_status: SightingStatus, reviewer: User
 ) -> Sighting:

@@ -14,6 +14,7 @@ export default function Login() {
   // Two-factor step: once the password check succeeds for a 2FA-enabled
   // account, we hold onto the mfa_token and show a second form for the code.
   const [mfaToken, setMfaToken] = useState(null);
+  const [mfaMethod, setMfaMethod] = useState(null); // "totp" | "email_otp"
   const [code, setCode] = useState("");
 
   const from = location.state?.from?.pathname || "/";
@@ -26,6 +27,7 @@ export default function Login() {
       const result = await login(form);
       if (result.mfaRequired) {
         setMfaToken(result.mfaToken);
+        setMfaMethod(result.mfaMethod);
       } else {
         navigate(from, { replace: true });
       }
@@ -56,7 +58,9 @@ export default function Login() {
         <div className="form-card">
           <h2>Two-factor verification</h2>
           <p className="field-hint" style={{ marginTop: -8, marginBottom: 20 }}>
-            Enter the 6-digit code from your authenticator app.
+            {mfaMethod === "email_otp"
+              ? "We just emailed a 6-digit code to your registered address. Enter it below."
+              : "Enter the 6-digit code from your authenticator app."}
           </p>
           {error && <div className="alert alert-error">{error}</div>}
           <form onSubmit={handleMfaSubmit}>
@@ -80,7 +84,7 @@ export default function Login() {
           <p className="field-hint" style={{ marginTop: "16px", textAlign: "center" }}>
             <button
               type="button"
-              onClick={() => setMfaToken(null)}
+              onClick={() => { setMfaToken(null); setMfaMethod(null); }}
               style={{ background: "none", border: "none", color: "var(--color-slate)", cursor: "pointer", textDecoration: "underline" }}
             >
               Back to login

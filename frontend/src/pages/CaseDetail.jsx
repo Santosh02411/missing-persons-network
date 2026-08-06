@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { approveCase, claimCase, getCase, updateCaseStatus } from "../api/cases";
+import { approveCase, claimCase, dismissCase, getCase, updateCaseStatus } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { listSightingsForCase } from "../api/sightings";
 import SightingForm from "../components/SightingForm";
@@ -78,6 +78,19 @@ export default function CaseDetail() {
     }
   }
 
+  async function handleDismissCase() {
+    setActionError(null);
+    setActionBusy(true);
+    try {
+      const { data } = await dismissCase(caseId);
+      setCaseItem(data);
+    } catch (err) {
+      setActionError(extractErrorMessage(err, "Couldn't dismiss this case."));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   if (isLoading) return <div className="container"><p className="spinner-text">Loading…</p></div>;
   if (error) return <div className="container"><div className="alert alert-error">{error}</div></div>;
   if (!caseItem) return null;
@@ -91,6 +104,9 @@ export default function CaseDetail() {
   const canClaim =
     isAuthorityOrAdmin && !isPendingReview && !caseItem.assigned_authority_id && user.is_verified !== false;
   const canChangeStatus = isAssignedAuthority || isAdmin;
+  const isClosed = caseItem.status === "resolved" || caseItem.status === "dismissed";
+  const canDismiss =
+    !isClosed && (isAdmin || isPendingReview || isAssignedAuthority) && isAuthorityOrAdmin;
 
   return (
     <div className="container">
@@ -131,10 +147,19 @@ export default function CaseDetail() {
             </p>
           )}
 
-          {canApprove && (
-            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleApproveCase} disabled={actionBusy}>
-              Approve this case
-            </button>
+          {(canApprove || canDismiss) && (
+            <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+              {canApprove && (
+                <button className="btn btn-primary" onClick={handleApproveCase} disabled={actionBusy}>
+                  Approve this case
+                </button>
+              )}
+              {canDismiss && (
+                <button className="btn btn-danger" onClick={handleDismissCase} disabled={actionBusy}>
+                  Dismiss this case
+                </button>
+              )}
+            </div>
           )}
 
           {canClaim && (

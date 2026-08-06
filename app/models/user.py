@@ -54,6 +54,13 @@ class User(Base):
     totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # Alternative to TOTP -- a fresh code emailed at each login instead of an
+    # authenticator app. No secret to store here: each code is generated,
+    # emailed, and checked against Redis at login time (see auth_service).
+    # Only one of totp_enabled/email_otp_enabled should be true at a time --
+    # enforced in auth_service, not at the DB level.
+    email_otp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     cases_reported = relationship(
         "Case", back_populates="reporter", foreign_keys="Case.created_by"
     )

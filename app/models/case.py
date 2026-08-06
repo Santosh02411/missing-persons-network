@@ -14,6 +14,7 @@ class CaseStatus(str, enum.Enum):
     OPEN = "open"
     LEAD_FOUND = "lead_found"
     RESOLVED = "resolved"
+    DISMISSED = "dismissed"  # rejected as invalid/fake, or closed without resolution
 
 
 class Case(Base):

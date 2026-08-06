@@ -81,15 +81,29 @@ def list_cases(db: Session, status_filter: CaseStatus | None, limit: int, offset
     # Never publicly listed, even if someone explicitly asks for
     # ?status=pending_review -- unapproved cases aren't public. Use
     # list_pending_approval_cases() (authority/admin only) for those.
+    # Dismissed (rejected/invalid) cases are excluded from the public list
+    # the same way -- they're not something the public needs to browse.
     stmt = (
         select(Case)
-        .where(Case.status != CaseStatus.PENDING_REVIEW)
+        .where(Case.status.not_in([CaseStatus.PENDING_REVIEW, CaseStatus.DISMISSED]))
         .order_by(Case.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
-    if status_filter is not None and status_filter != CaseStatus.PENDING_REVIEW:
+    if status_filter is not None and status_filter not in (
+        CaseStatus.PENDING_REVIEW,
+        CaseStatus.DISMISSED,
+    ):
         stmt = stmt.where(Case.status == status_filter)
+    return list(db.scalars(stmt))
+
+
+def list_my_cases(db: Session, user_id) -> list[Case]:
+    """All cases filed by this user, any status (including pending_review and
+    dismissed) -- backs the citizen dashboard's "my cases" list. Unlike the
+    public list, this deliberately shows every status, since the point is
+    letting someone track what happened to their own submission."""
+    stmt = select(Case).where(Case.created_by == user_id).order_by(Case.created_at.desc())
     return list(db.scalars(stmt))
 
 
@@ -186,13 +200,56 @@ def claim_case(db: Session, case: Case, actor: User) -> Case:
     return case
 
 
+def dismiss_case(db: Session, case: Case, actor: User, reason: str | None = None) -> Case:
+    """Rejects a case -- either a pending_review submission judged fake/
+    invalid, or an approved case closed without a resolution. Admins can
+    dismiss any case; authorities can only dismiss a case that's still
+    pending review (anyone reviewing can reject it) or already assigned to
+    them specifically (not another authority's active case)."""
+    if case.status in (CaseStatus.RESOLVED, CaseStatus.DISMISSED):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="This case is already closed."
+        )
+
+    is_admin = actor.role == UserRole.ADMIN
+    is_pending = case.status == CaseStatus.PENDING_REVIEW
+    is_assigned_authority = (
+        actor.role == UserRole.AUTHORITY and case.assigned_authority_id == actor.id
+    )
+    if not (is_admin or is_pending or is_assigned_authority):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned authority or an admin can dismiss this case",
+        )
+
+    old_status = case.status
+    case.status = CaseStatus.DISMISSED
+    db.add(
+        AuditLog(
+            actor_id=actor.id,
+            action="case.dismissed",
+            target_type="case",
+            target_id=case.id,
+            log_metadata={"from": old_status.value, "reason": reason},
+        )
+    )
+    db.commit()
+    db.refresh(case)
+    bump_cases_list_version()
+    return case
+
+
 def update_case_status(
     db: Session, case: Case, new_status: CaseStatus, actor: User
 ) -> Case:
-    if new_status == CaseStatus.PENDING_REVIEW:
+    if new_status in (CaseStatus.PENDING_REVIEW, CaseStatus.DISMISSED):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can't manually set a case back to pending review.",
+            detail="Use the approve/dismiss actions for these transitions, not a direct status update.",
+        )
+    if case.status in (CaseStatus.RESOLVED, CaseStatus.DISMISSED):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="This case is already closed."
         )
 
     # Route-level require_verified_authority_or_admin already ensures actor's

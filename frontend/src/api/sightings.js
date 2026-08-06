@@ -16,6 +16,10 @@ export function pendingSightings({ limit = 50, offset = 0 } = {}) {
   return apiClient.get("/sightings/pending", { params: { limit, offset } });
 }
 
+export function mySightings() {
+  return apiClient.get("/sightings/mine");
+}
+
 export function nearbySightings({ lat, lng, radius_km = 5, limit = 50 }) {
   return apiClient.get("/sightings/nearby", { params: { lat, lng, radius_km, limit } });
 }

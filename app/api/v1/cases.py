@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.cache import CASES_LIST_TTL_SECONDS, cases_list_cache_key
-from app.core.deps import get_current_user, get_current_user_optional, require_verified_authority_or_admin
+from app.core.deps import get_current_user, require_verified_authority_or_admin
 from app.core.redis_client import redis_client
 from app.db.session import get_db
 from app.models.case import CaseStatus
@@ -37,15 +37,20 @@ def list_cases(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[CaseListItem]:
-    """Public -- browse cases. No auth required, matches FR-5.
-    Never includes pending_review cases -- see case_service.list_cases().
+    """Requires login -- browsing cases is restricted to registered users
+    (any role) so that filing/viewing/sharing case info always happens under
+    an identifiable account, not anonymously. Never includes pending_review
+    or dismissed cases -- see case_service.list_cases().
 
     Cached in Redis for CASES_LIST_TTL_SECONDS. The cache key includes a
     version number (see core/cache.py) that's bumped on any case write, so
     stale results aren't served past the next create/edit/claim/status-change
     -- the TTL is a backstop for read load, not the primary invalidation
-    mechanism.
+    mechanism. The cache itself isn't user-specific (the same approved-cases
+    list is the same for every logged-in viewer), so it's safe to share
+    across users despite the endpoint now requiring auth.
     """
     cache_key = cases_list_cache_key(
         status_filter.value if status_filter else None, limit, offset
@@ -67,13 +72,28 @@ def get_nearby_cases(
     radius_km: float = Query(default=10, gt=0, le=500),
     limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[CaseListItem]:
     """FR-11: open cases whose last-seen location is within radius_km of
-    (lat, lng), nearest first. Must be registered before /{case_id} below --
-    otherwise FastAPI would try to parse "nearby" as a case_id and 422."""
+    (lat, lng), nearest first. Requires login, same as the plain list above.
+    Must be registered before /{case_id} below -- otherwise FastAPI would
+    try to parse "nearby" as a case_id and 422."""
     center = GeoPoint(lat=lat, lng=lng)
     cases = nearby_cases(db, center, radius_km, limit)
     return [CaseListItem.model_validate(c) for c in cases]
+
+
+@router.get("/mine", response_model=list[CaseRead])
+def get_my_cases(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[CaseRead]:
+    """Backs the citizen dashboard's "my cases" list -- every case this user
+    filed, at any status (including pending_review and dismissed), so they
+    can track what happened to their own submissions. Registered before
+    /{case_id} for the usual routing-order reason."""
+    cases = case_service.list_my_cases(db, current_user.id)
+    return [CaseRead.model_validate(c) for c in cases]
 
 
 @router.get("/assigned-to-me", response_model=list[CaseRead])
@@ -106,11 +126,11 @@ def get_pending_approval_cases(
 def get_case(
     case_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ) -> CaseRead:
-    """Public for approved cases. A pending_review case is only visible to
-    the reporter who filed it or an authority/admin -- see
-    case_service.get_case_or_404's visibility check."""
+    """Requires login for any case. A pending_review or dismissed case is
+    further restricted to the reporter who filed it or an authority/admin --
+    see case_service.get_case_or_404's visibility check."""
     case = case_service.get_case_or_404(db, case_id, current_user)
     return CaseRead.model_validate(case)
 
@@ -140,6 +160,22 @@ def approve_case(
     authority becomes the assigned one."""
     case = case_service.get_case_or_404(db, case_id, current_user)
     updated = case_service.approve_case(db, case, actor=current_user)
+    return CaseRead.model_validate(updated)
+
+
+@router.post("/{case_id}/dismiss", response_model=CaseRead)
+def dismiss_case(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> CaseRead:
+    """Rejects a case -- either a pending_review submission judged fake/
+    invalid, or an already-approved case closed without a resolution (e.g.
+    turned out to be a false report). Admins can dismiss any case; an
+    authority can dismiss a case that's pending review or already assigned
+    to them (see case_service.dismiss_case for the exact rule)."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    updated = case_service.dismiss_case(db, case, actor=current_user)
     return CaseRead.model_validate(updated)
 
 

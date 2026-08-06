@@ -32,8 +32,16 @@ export function pendingApprovalCases() {
   return apiClient.get("/cases/pending-approval");
 }
 
+export function myCases() {
+  return apiClient.get("/cases/mine");
+}
+
 export function approveCase(caseId) {
   return apiClient.post(`/cases/${caseId}/approve`);
+}
+
+export function dismissCase(caseId) {
+  return apiClient.post(`/cases/${caseId}/dismiss`);
 }
 
 export function nearbyCases({ lat, lng, radius_km = 10, limit = 50 }) {

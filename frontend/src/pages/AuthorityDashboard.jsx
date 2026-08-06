@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { approveCase, assignedToMe, pendingApprovalCases } from "../api/cases";
+import { approveCase, assignedToMe, dismissCase, pendingApprovalCases } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { pendingSightings, reviewSighting } from "../api/sightings";
 import StatusBadge from "../components/StatusBadge";
@@ -49,6 +49,18 @@ export default function AuthorityDashboard() {
       setAssignedCases((prev) => [approved, ...prev]);
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't approve that case."));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDismissCase(caseId) {
+    setBusyId(caseId);
+    try {
+      await dismissCase(caseId);
+      setPendingCases((prev) => prev.filter((c) => c.id !== caseId));
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't dismiss that case."));
     } finally {
       setBusyId(null);
     }
@@ -112,13 +124,22 @@ export default function AuthorityDashboard() {
                   </span>
                 </div>
                 <div className="field-hint" style={{ marginBottom: 8 }}>{c.last_seen_address}</div>
-                <button
-                  className="btn btn-primary"
-                  disabled={busyId === c.id}
-                  onClick={() => handleApproveCase(c.id)}
-                >
-                  Approve
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    className="btn btn-primary"
+                    disabled={busyId === c.id}
+                    onClick={() => handleApproveCase(c.id)}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    disabled={busyId === c.id}
+                    onClick={() => handleDismissCase(c.id)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
               </div>
             ))}
           </div>
