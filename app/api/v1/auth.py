@@ -24,7 +24,7 @@ from app.schemas.token import (
     TwoFactorLoginRequest,
     TwoFactorSetupResponse,
 )
-from app.schemas.user import UserCreate, UserLogin, UserRead
+from app.schemas.user import JurisdictionUpdate, UserCreate, UserLogin, UserRead
 from app.services.auth_service import (
     authenticate_user,
     confirm_email_otp_setup,
@@ -44,6 +44,7 @@ from app.services.auth_service import (
     start_email_otp_setup,
     start_totp_setup,
     store_refresh_jti,
+    update_jurisdiction,
     verify_login_otp,
 )
 
@@ -209,6 +210,18 @@ def get_me(current_user: User = Depends(get_current_user)) -> User:
     """Lets the frontend identify who's logged in (and their role) after a
     page reload, when it has an access token but no in-memory user object."""
     return current_user
+
+
+@router.patch("/me/jurisdiction", response_model=UserRead)
+def update_my_jurisdiction(
+    payload: JurisdictionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.AUTHORITY, UserRole.ADMIN)),
+) -> User:
+    """Sets or updates the current authority account's station location --
+    used to auto-route newly-filed cases to the nearest verified station
+    (see case_service.create_case)."""
+    return update_jurisdiction(db, current_user, payload.jurisdiction_location)
 
 
 @router.post("/verify-email", response_model=UserRead)

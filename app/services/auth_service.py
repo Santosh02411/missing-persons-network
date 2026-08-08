@@ -13,6 +13,7 @@ from app.core.redis_client import redis_client
 from app.core.security import hash_password, verify_password
 from app.core.totp import generate_totp_secret, get_provisioning_uri, verify_totp_code
 from app.models.user import User, UserRole
+from app.schemas.geo import GeoPoint
 from app.schemas.user import UserCreate
 
 SESSION_KEY_PREFIX = "refresh_jti"  # kept for backwards-compatible key naming
@@ -57,11 +58,28 @@ def register_user(db: Session, payload: UserCreate) -> User:
         is_verified=is_verified,
         email_verified=False,
     )
+    if role == UserRole.AUTHORITY and payload.jurisdiction_location is not None:
+        from app.services.geo_service import to_geography
+
+        user.jurisdiction_location = to_geography(payload.jurisdiction_location)
     db.add(user)
     db.commit()
     db.refresh(user)
 
     send_verification_email(user)
+    return user
+
+
+def update_jurisdiction(db: Session, user: User, location: GeoPoint) -> User:
+    """Lets an authority set/update its station location after signup (e.g.
+    it wasn't provided at registration). Route-level require_role already
+    restricts this to authority/admin accounts; case_service's nearest-
+    station routing simply won't match this account until it's set."""
+    from app.services.geo_service import to_geography
+
+    user.jurisdiction_location = to_geography(location)
+    db.commit()
+    db.refresh(user)
     return user
 
 

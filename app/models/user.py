@@ -1,5 +1,6 @@
 import enum
 
+from geoalchemy2 import Geography
 from sqlalchemy import Boolean, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -45,6 +46,16 @@ class User(Base):
 
     # Only meaningful for AUTHORITY role (e.g. "Belagavi City Police", "Missing Children NGO")
     org_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Only meaningful for AUTHORITY role: this station/NGO office's location.
+    # Used to route newly-filed cases to the nearest station instead of
+    # broadcasting every case to every authority nationwide (see
+    # case_service.create_case / geo_service.nearest_authority). Nullable --
+    # an authority that hasn't set this yet just won't be proximity-matched;
+    # their existing cases and permissions are unaffected.
+    jurisdiction_location: Mapped[str | None] = mapped_column(
+        Geography(geometry_type="POINT", srid=4326), nullable=True
+    )
 
     # Two-factor auth (TOTP). totp_secret is set (but totp_enabled stays
     # False) while setup is pending confirmation via /auth/2fa/verify --

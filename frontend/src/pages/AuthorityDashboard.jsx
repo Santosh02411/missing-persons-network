@@ -102,7 +102,7 @@ export default function AuthorityDashboard() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      <section style={{ marginBottom: 40 }}>
+      <section className="dashboard-card">
         <div className="section-heading">
           <h3 style={{ margin: 0 }}>Cases awaiting approval ({pendingCases.length})</h3>
         </div>
@@ -146,7 +146,7 @@ export default function AuthorityDashboard() {
         )}
       </section>
 
-      <section style={{ marginBottom: 40 }}>
+      <section className="dashboard-card">
         <div className="section-heading">
           <h3 style={{ margin: 0 }}>Pending sightings ({queue.length})</h3>
         </div>
@@ -189,7 +189,7 @@ export default function AuthorityDashboard() {
         )}
       </section>
 
-      <section>
+      <section className="dashboard-card">
         <div className="section-heading">
           <h3 style={{ margin: 0 }}>My assigned cases ({assignedCases.length})</h3>
         </div>

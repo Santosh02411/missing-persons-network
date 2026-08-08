@@ -4,6 +4,7 @@ import { createCase } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import LocationPicker from "../components/LocationPicker";
 import PhotoUpload from "../components/PhotoUpload";
+import StationPicker from "../components/StationPicker";
 
 export default function CaseCreate() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export default function CaseCreate() {
     last_seen_at: "",
   });
   const [location, setLocation] = useState(null);
+  const [targetAuthorityId, setTargetAuthorityId] = useState(null);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -44,6 +46,7 @@ export default function CaseCreate() {
         last_seen_location: location,
         last_seen_address: form.last_seen_address,
         last_seen_at: new Date(form.last_seen_at).toISOString(),
+        target_authority_id: targetAuthorityId,
       });
       navigate(`/cases/${data.id}`);
     } catch (err) {
@@ -126,6 +129,16 @@ export default function CaseCreate() {
           <div className="field">
             <label>Last-seen location on the map</label>
             <LocationPicker value={location} onChange={setLocation} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="station">File with this station</label>
+            <StationPicker value={targetAuthorityId} onChange={setTargetAuthorityId} location={location} />
+            <p className="field-hint">
+              This case is only sent to the station you pick (or the nearest verified
+              station, if you leave it on auto-route) — not broadcast to every police
+              station and NGO nationwide.
+            </p>
           </div>
 
           <button className="btn btn-primary btn-block" type="submit" disabled={isSubmitting}>

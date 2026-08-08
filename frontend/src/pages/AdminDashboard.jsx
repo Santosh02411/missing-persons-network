@@ -80,7 +80,7 @@ export default function AdminDashboard() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      <section style={{ marginBottom: 40 }}>
+      <section className="dashboard-card">
         <div className="section-heading">
           <h3 style={{ margin: 0 }}>Pending authority approvals ({pending.length})</h3>
         </div>
@@ -113,7 +113,7 @@ export default function AdminDashboard() {
         )}
       </section>
 
-      <section style={{ marginBottom: 40 }}>
+      <section className="dashboard-card">
         <div className="section-heading">
           <h3 style={{ margin: 0 }}>Users ({users.length})</h3>
         </div>
@@ -154,7 +154,7 @@ export default function AdminDashboard() {
         </div>
       </section>
 
-      <section>
+      <section className="dashboard-card">
         <div className="section-heading">
           <h3 style={{ margin: 0 }}>Recent activity ({auditLogs.length})</h3>
         </div>

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.case import Case, CaseStatus
 from app.models.sighting import Sighting
+from app.models.user import User, UserRole
 from app.schemas.geo import GeoPoint
 
 SRID = 4326
@@ -65,3 +66,39 @@ def nearby_cases(
         .limit(limit)
     )
     return list(db.scalars(stmt))
+
+
+def nearby_authorities(
+    db: Session, center: GeoPoint, radius_km: float = 100, limit: int = 20
+) -> list[User]:
+    """Verified authority/NGO accounts whose station (jurisdiction_location)
+    is within `radius_km` of `center`, nearest first. Backs both the "file
+    to this station" picker on case creation and the nearest-station
+    auto-routing fallback in case_service.create_case. Authorities that
+    haven't set a jurisdiction_location are never returned here (there's
+    nothing to measure distance to) -- see list_all_authorities() below for
+    those."""
+    point = _geography_point(center)
+    radius_m = radius_km * 1000
+    stmt = (
+        select(User)
+        .where(
+            User.role == UserRole.AUTHORITY,
+            User.is_verified.is_(True),
+            User.is_active.is_(True),
+            User.jurisdiction_location.isnot(None),
+            func.ST_DWithin(User.jurisdiction_location, point, radius_m),
+        )
+        .order_by(func.ST_Distance(User.jurisdiction_location, point))
+        .limit(limit)
+    )
+    return list(db.scalars(stmt))
+
+
+def nearest_authority(db: Session, center: GeoPoint, radius_km: float = 100) -> User | None:
+    """Single nearest verified station within `radius_km`, or None if no
+    station has a jurisdiction set within range -- the caller (case_service)
+    treats None as "fall back to broadcasting this case to any authority"
+    rather than as an error."""
+    matches = nearby_authorities(db, center, radius_km=radius_km, limit=1)
+    return matches[0] if matches else None

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import PasswordField from "../components/PasswordField";
 
 export default function Login() {
   const { login, completeMfaLogin } = useAuth();
@@ -111,16 +112,14 @@ export default function Login() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
           </div>
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
-          </div>
+          <PasswordField
+            id="password"
+            label="Password"
+            required
+            autoComplete="current-password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+          />
           <button className="btn btn-primary btn-block" type="submit" disabled={isSubmitting}>
             {isSubmitting ? "Logging in…" : "Log in"}
           </button>

@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.core.security import validate_password_byte_length
 from app.models.user import UserRole
+from app.schemas.geo import GeoPoint
 
 
 class UserCreate(BaseModel):
@@ -25,6 +26,12 @@ class UserCreate(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
     role: Literal["reporter", "authority"] = "reporter"
     org_name: str | None = Field(default=None, max_length=255)
+
+    # Only meaningful when role="authority" -- the station/office location,
+    # used to route newly-filed cases to the nearest station instead of
+    # broadcasting every case nationwide. Optional at signup; an authority
+    # can also set this later (see PATCH /auth/me/jurisdiction).
+    jurisdiction_location: GeoPoint | None = None
 
     @field_validator("password")
     @classmethod
@@ -50,8 +57,41 @@ class UserRead(BaseModel):
     totp_enabled: bool
     email_otp_enabled: bool
     org_name: str | None = None
+    jurisdiction_location: GeoPoint | None = None
+
+    @field_validator("jurisdiction_location", mode="before")
+    @classmethod
+    def _convert_jurisdiction_geography(cls, value):
+        # Same WKBElement -> GeoPoint conversion CaseRead needs -- reading a
+        # User back from the DB gives a raw geoalchemy2 WKBElement for this
+        # column, not a {lat, lng} shape.
+        from app.services.geo_service import from_geography
+
+        if value is None or isinstance(value, dict):
+            return value
+        return from_geography(value)
 
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+
+class JurisdictionUpdate(BaseModel):
+    """Lets an authority account set or update its station location after
+    signup, without needing a full profile-edit endpoint."""
+
+    jurisdiction_location: GeoPoint
+
+
+class AuthorityDirectoryItem(BaseModel):
+    """Slim shape for the "file to this station" / "share with this
+    authority" pickers -- deliberately not the full UserRead."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    full_name: str
+    org_name: str | None
+    email: EmailStr
+    distance_km: float | None = None

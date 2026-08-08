@@ -66,6 +66,12 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
+  async function refreshUser() {
+    const { data: currentUser } = await authApi.fetchCurrentUser();
+    setUser(currentUser);
+    return currentUser;
+  }
+
   const value = {
     user,
     isLoading,
@@ -74,6 +80,7 @@ export function AuthProvider({ children }) {
     completeMfaLogin,
     register,
     logout,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

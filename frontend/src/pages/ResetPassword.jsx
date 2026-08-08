@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { resetPassword } from "../api/auth";
 import { extractErrorMessage } from "../api/client";
+import PasswordField from "../components/PasswordField";
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -52,18 +53,16 @@ export default function ResetPassword() {
         ) : (
           <form onSubmit={handleSubmit}>
             {error && <div className="alert alert-error">{error}</div>}
-            <div className="field">
-              <label htmlFor="new_password">New password</label>
-              <input
-                id="new_password"
-                type="password"
-                minLength={8}
-                required
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-              <p className="field-hint">At least 8 characters.</p>
-            </div>
+            <PasswordField
+              id="new_password"
+              label="New password"
+              minLength={8}
+              required
+              autoComplete="new-password"
+              hint="At least 8 characters."
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
             <button className="btn btn-primary btn-block" type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Updating…" : "Update password"}
             </button>

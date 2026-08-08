@@ -1,3 +1,4 @@
+import os
 import uuid
 
 from fastapi import HTTPException, status
@@ -5,14 +6,51 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.cache import bump_cases_list_version
+from app.core.config import settings
+from app.core.email import send_email
 from app.models.audit_log import AuditLog
 from app.models.case import Case, CaseStatus
 from app.models.user import User, UserRole
-from app.schemas.case import CaseCreate, CaseUpdate
-from app.services.geo_service import to_geography
+from app.schemas.case import CaseCreate, CaseShareRequest, CaseUpdate
+from app.services.geo_service import nearest_authority, to_geography
+
+# How far case_service will look for a station to auto-route a case to when
+# the reporter didn't pick one explicitly. Beyond this, or if no authority
+# in the whole system has a jurisdiction_location set yet, the case falls
+# back to target_authority_id=None (visible to any verified authority) --
+# see list_pending_approval_cases() -- rather than becoming unreviewable.
+AUTO_ROUTE_RADIUS_KM = 100
+
+
+def _resolve_target_authority(db: Session, payload: CaseCreate) -> uuid.UUID | None:
+    if payload.target_authority_id is not None:
+        target = db.get(User, payload.target_authority_id)
+        if (
+            target is None
+            or target.role != UserRole.AUTHORITY
+            or not target.is_verified
+            or not target.is_active
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="That station isn't a valid, verified authority account.",
+            )
+        return target.id
+
+    nearest = nearest_authority(db, payload.last_seen_location, radius_km=AUTO_ROUTE_RADIUS_KM)
+    return nearest.id if nearest else None
 
 
 def create_case(db: Session, payload: CaseCreate, reporter: User) -> Case:
+    """New cases are routed to a single station -- either the reporter's
+    explicit choice or the nearest verified authority to last_seen_location
+    -- rather than broadcast to every police/NGO account nationwide (see
+    list_pending_approval_cases). If no station can be resolved (none picked,
+    none within range, or no authority has set a jurisdiction yet), the case
+    is left unrouted and falls back to being visible to any verified
+    authority, so it's never stuck unreviewable."""
+    target_authority_id = _resolve_target_authority(db, payload)
+
     case = Case(
         created_by=reporter.id,
         name=payload.name,
@@ -23,6 +61,7 @@ def create_case(db: Session, payload: CaseCreate, reporter: User) -> Case:
         last_seen_address=payload.last_seen_address,
         last_seen_at=payload.last_seen_at,
         status=CaseStatus.PENDING_REVIEW,
+        target_authority_id=target_authority_id,
     )
     db.add(case)
     db.commit()
@@ -52,15 +91,23 @@ def get_case_or_404(db: Session, case_id: uuid.UUID, current_user: User | None =
     return case
 
 
-def list_pending_approval_cases(db: Session, limit: int = 50, offset: int = 0) -> list[Case]:
-    """Backs the authority dashboard's approval queue."""
-    stmt = (
-        select(Case)
-        .where(Case.status == CaseStatus.PENDING_REVIEW)
-        .order_by(Case.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+def list_pending_approval_cases(
+    db: Session, actor: User, limit: int = 50, offset: int = 0
+) -> list[Case]:
+    """Backs the authority dashboard's approval queue.
+
+    A case is only routed to one station (see create_case), so an authority
+    only sees cases either explicitly filed with them or auto-routed to them
+    as the nearest station -- not every pending case nationwide. Cases that
+    couldn't be routed to any station (target_authority_id is NULL) still
+    show up for every verified authority, as a fallback so nothing sits
+    unreviewable. Admins see everything, for oversight."""
+    stmt = select(Case).where(Case.status == CaseStatus.PENDING_REVIEW)
+    if actor.role != UserRole.ADMIN:
+        stmt = stmt.where(
+            (Case.target_authority_id == actor.id) | (Case.target_authority_id.is_(None))
+        )
+    stmt = stmt.order_by(Case.created_at.desc()).limit(limit).offset(offset)
     return list(db.scalars(stmt))
 
 
@@ -138,6 +185,23 @@ def update_case(db: Session, case: Case, payload: CaseUpdate, current_user: User
     return case
 
 
+def _require_target_authority_or_admin(case: Case, actor: User) -> None:
+    """A pending case routed to a specific station (target_authority_id set)
+    can only be approved/dismissed by that station's account, or an admin --
+    this is what makes routing in create_case actually mean something,
+    rather than every authority still being able to act on every case. A
+    case with no resolved target (target_authority_id is None) stays open
+    to any verified authority, matching the fallback in
+    list_pending_approval_cases."""
+    if actor.role == UserRole.ADMIN:
+        return
+    if case.target_authority_id is not None and case.target_authority_id != actor.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This case was filed with a different police station or NGO authority.",
+        )
+
+
 def approve_case(db: Session, case: Case, actor: User) -> Case:
     """An authority/admin approves a newly-filed case, making it public and
     simultaneously claiming it (the approving authority becomes the assigned
@@ -149,6 +213,7 @@ def approve_case(db: Session, case: Case, actor: User) -> Case:
             status_code=status.HTTP_409_CONFLICT,
             detail="This case has already been reviewed.",
         )
+    _require_target_authority_or_admin(case, actor)
 
     case.status = CaseStatus.OPEN
     case.assigned_authority_id = actor.id
@@ -212,14 +277,18 @@ def dismiss_case(db: Session, case: Case, actor: User, reason: str | None = None
         )
 
     is_admin = actor.role == UserRole.ADMIN
-    is_pending = case.status == CaseStatus.PENDING_REVIEW
+    is_targeted_pending = (
+        case.status == CaseStatus.PENDING_REVIEW
+        and actor.role == UserRole.AUTHORITY
+        and (case.target_authority_id is None or case.target_authority_id == actor.id)
+    )
     is_assigned_authority = (
         actor.role == UserRole.AUTHORITY and case.assigned_authority_id == actor.id
     )
-    if not (is_admin or is_pending or is_assigned_authority):
+    if not (is_admin or is_targeted_pending or is_assigned_authority):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the assigned authority or an admin can dismiss this case",
+            detail="Only the station this case was filed with, the assigned authority, or an admin can dismiss this case",
         )
 
     old_status = case.status
@@ -280,3 +349,129 @@ def update_case_status(
     db.refresh(case)
     bump_cases_list_version()
     return case
+
+
+def _load_case_photo(case: Case) -> tuple[str, bytes] | None:
+    """Reads the case's photo straight off local disk for use as an email
+    attachment, rather than making an HTTP request back to our own server.
+    photo_url is always "<base>/media/<filename>" (see api/v1/uploads.py),
+    and /media/ is a StaticFiles mount of settings.UPLOAD_DIR -- so the
+    filename after the last "/media/" segment is exactly the on-disk name.
+    Returns None (rather than raising) on any failure -- a missing/unreadable
+    photo shouldn't block sharing the rest of the case details."""
+    if not case.photo_url:
+        return None
+    marker = "/media/"
+    idx = case.photo_url.rfind(marker)
+    if idx == -1:
+        return None
+    filename = case.photo_url[idx + len(marker):]
+    if not filename or "/" in filename or ".." in filename:
+        return None
+    filepath = os.path.join(settings.UPLOAD_DIR, filename)
+    try:
+        with open(filepath, "rb") as f:
+            return filename, f.read()
+    except OSError:
+        return None
+
+
+def share_case(db: Session, case: Case, payload: CaseShareRequest, actor: User) -> None:
+    """Emails the case's full details -- plus the case photo as a soft copy,
+    when one exists -- to another police/NGO authority, and includes a
+    direct link so the recipient can open the case on the website. Either an
+    existing authority account (to_authority_id) or an arbitrary address for
+    a station not yet on the platform (to_email) works; exactly one must be
+    given (validated below).
+
+    Restricted to the case's assigned authority or an admin -- sharing is
+    part of an active investigation being coordinated, not something any
+    authority can do to any case."""
+    is_admin = actor.role == UserRole.ADMIN
+    is_assigned_authority = (
+        actor.role == UserRole.AUTHORITY and case.assigned_authority_id == actor.id
+    )
+    if not (is_admin or is_assigned_authority):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned authority or an admin can share this case",
+        )
+
+    if payload.to_authority_id is not None and payload.to_email is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either to_authority_id or to_email, not both.",
+        )
+
+    if payload.to_authority_id is not None:
+        recipient = db.get(User, payload.to_authority_id)
+        if recipient is None or recipient.role != UserRole.AUTHORITY or not recipient.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="That recipient isn't a valid, verified authority account.",
+            )
+        to_email = recipient.email
+    elif payload.to_email is not None:
+        to_email = payload.to_email
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either to_authority_id or to_email.",
+        )
+
+    case_url = f"{settings.FRONTEND_URL.rstrip('/')}/cases/{case.id}"
+    lines = [
+        f"{actor.full_name}" + (f" ({actor.org_name})" if actor.org_name else ""),
+        "has shared a missing person case with you on the Reunification Network.",
+        "",
+        f"Name: {case.name}",
+    ]
+    if case.age_at_disappearance is not None:
+        lines.append(f"Age at disappearance: {case.age_at_disappearance}")
+    lines += [
+        f"Status: {case.status.value.replace('_', ' ').title()}",
+        f"Last seen: {case.last_seen_address}",
+        f"Last seen at: {case.last_seen_at.isoformat()}",
+        "",
+        "Description:",
+        case.description,
+        "",
+    ]
+    if payload.message:
+        lines += ["Message from the sender:", payload.message, ""]
+    lines += [
+        f"View the full case, sightings, and take action here: {case_url}",
+        "",
+        "If you don't have an account on the Reunification Network yet, you can",
+        f"register a verified authority account at {settings.FRONTEND_URL.rstrip('/')}/register "
+        "to access this case directly.",
+    ]
+    if case.photo_url:
+        lines.append("\nA photo of the case is attached to this email as a soft copy.")
+    body = "\n".join(lines)
+
+    attachments = []
+    photo = _load_case_photo(case)
+    if photo is not None:
+        attachments.append(photo)
+
+    send_email(
+        to=to_email,
+        subject=f"Case shared: {case.name} — Reunification Network",
+        body=body,
+        attachments=attachments,
+    )
+
+    db.add(
+        AuditLog(
+            actor_id=actor.id,
+            action="case.shared",
+            target_type="case",
+            target_id=case.id,
+            log_metadata={
+                "to_authority_id": str(payload.to_authority_id) if payload.to_authority_id else None,
+                "to_email": to_email,
+            },
+        )
+    )
+    db.commit()

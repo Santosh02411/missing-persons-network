@@ -1,7 +1,18 @@
 import { apiClient } from "./client";
 
-export function registerAccount({ email, password, full_name, role, org_name }) {
-  return apiClient.post("/auth/register", { email, password, full_name, role, org_name });
+export function registerAccount({ email, password, full_name, role, org_name, jurisdiction_location }) {
+  return apiClient.post("/auth/register", {
+    email,
+    password,
+    full_name,
+    role,
+    org_name,
+    jurisdiction_location,
+  });
+}
+
+export function updateJurisdiction(jurisdiction_location) {
+  return apiClient.patch("/auth/me/jurisdiction", { jurisdiction_location });
 }
 
 export function login({ email, password }) {

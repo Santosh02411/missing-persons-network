@@ -10,7 +10,7 @@ from app.core.redis_client import redis_client
 from app.db.session import get_db
 from app.models.case import CaseStatus
 from app.models.user import User
-from app.schemas.case import CaseCreate, CaseListItem, CaseRead, CaseStatusUpdate, CaseUpdate
+from app.schemas.case import CaseCreate, CaseListItem, CaseRead, CaseShareRequest, CaseStatusUpdate, CaseUpdate
 from app.schemas.geo import GeoPoint
 from app.services import case_service
 from app.services.geo_service import nearby_cases
@@ -118,7 +118,7 @@ def get_pending_approval_cases(
     """Backs the authority dashboard's approval queue -- newly filed cases
     waiting to be reviewed before they go public. Registered before
     /{case_id} for the same routing-order reason as /nearby above."""
-    cases = case_service.list_pending_approval_cases(db, limit, offset)
+    cases = case_service.list_pending_approval_cases(db, current_user, limit, offset)
     return [CaseRead.model_validate(c) for c in cases]
 
 
@@ -207,3 +207,19 @@ def update_case_status(
     case = case_service.get_case_or_404(db, case_id, current_user)
     updated = case_service.update_case_status(db, case, payload.status, actor=current_user)
     return CaseRead.model_validate(updated)
+
+
+@router.post("/{case_id}/share", status_code=204)
+def share_case_route(
+    case_id: uuid.UUID,
+    payload: CaseShareRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> None:
+    """Shares this case's full details -- and its photo, as a soft copy --
+    with another police/NGO authority by email. That authority can also open
+    the case directly on the website via the link in the email. Restricted
+    at the row level to the case's assigned authority or an admin (see
+    case_service.share_case)."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    case_service.share_case(db, case, payload, actor=current_user)

@@ -16,6 +16,12 @@ class CaseCreate(BaseModel):
     last_seen_address: str = Field(min_length=1, max_length=500)
     last_seen_at: datetime
 
+    # Optional: the reporter can pick a specific police station / NGO to
+    # file this case with (from the nearby-authorities picker). If omitted,
+    # case_service.create_case auto-routes to the nearest verified station
+    # instead of broadcasting the case to every authority nationwide.
+    target_authority_id: uuid.UUID | None = None
+
 
 class CaseUpdate(BaseModel):
     """Partial update — all fields optional. Status is intentionally excluded;
@@ -47,6 +53,7 @@ class CaseRead(BaseModel):
     last_seen_at: datetime
     status: CaseStatus
     assigned_authority_id: uuid.UUID | None
+    target_authority_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -64,6 +71,28 @@ class CaseRead(BaseModel):
         if isinstance(value, dict):
             return value  # already {lat, lng} -- e.g. round-tripped in tests
         return from_geography(value)
+
+
+class CaseShareRequest(BaseModel):
+    """Exactly one of to_authority_id (an existing authority account) or
+    to_email (any address -- e.g. a station not yet registered on the
+    platform) must be set."""
+
+    to_authority_id: uuid.UUID | None = None
+    to_email: str | None = Field(default=None, max_length=255)
+    message: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("to_email")
+    @classmethod
+    def _validate_email_shape(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        # Lightweight shape check -- full EmailStr validation would reject
+        # this field being absent/None, which is fine here since exactly one
+        # of the two target fields is required (checked in the route).
+        if "@" not in value or "." not in value.split("@")[-1]:
+            raise ValueError("Enter a valid email address")
+        return value
 
 
 class CaseListItem(BaseModel):

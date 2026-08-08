@@ -47,3 +47,7 @@ export function dismissCase(caseId) {
 export function nearbyCases({ lat, lng, radius_km = 10, limit = 50 }) {
   return apiClient.get("/cases/nearby", { params: { lat, lng, radius_km, limit } });
 }
+
+export function shareCase(caseId, payload) {
+  return apiClient.post(`/cases/${caseId}/share`, payload);
+}

@@ -49,8 +49,21 @@ class Case(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
 
+    # The specific authority/NGO this case was routed to at filing time --
+    # either the reporter's explicit choice or the nearest verified station
+    # to last_seen_location (see case_service.create_case). Distinct from
+    # assigned_authority_id, which is set only once someone actually
+    # approves/claims the case. NULL means no jurisdiction-matched station
+    # was found, so the case is visible to any verified authority as a
+    # fallback (see case_service.list_pending_approval_cases) rather than
+    # being stuck unreviewable.
+    target_authority_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+
     reporter = relationship("User", back_populates="cases_reported", foreign_keys=[created_by])
     assigned_authority = relationship("User", foreign_keys=[assigned_authority_id])
+    target_authority = relationship("User", foreign_keys=[target_authority_id])
     sightings = relationship("Sighting", back_populates="case", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:

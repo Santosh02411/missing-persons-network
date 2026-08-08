@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import PasswordField from "../components/PasswordField";
+import LocationPicker from "../components/LocationPicker";
 
 export default function Register() {
   const { register } = useAuth();
@@ -13,6 +15,7 @@ export default function Register() {
     role: "reporter",
     org_name: "",
   });
+  const [jurisdictionLocation, setJurisdictionLocation] = useState(null);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -25,7 +28,11 @@ export default function Register() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await register(form);
+      const payload = { ...form };
+      if (form.role === "authority" && jurisdictionLocation) {
+        payload.jurisdiction_location = jurisdictionLocation;
+      }
+      await register(payload);
       navigate("/", { replace: true });
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't create your account."));
@@ -59,18 +66,16 @@ export default function Register() {
               onChange={(e) => updateField("email", e.target.value)}
             />
           </div>
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              minLength={8}
-              required
-              value={form.password}
-              onChange={(e) => updateField("password", e.target.value)}
-            />
-            <p className="field-hint">At least 8 characters.</p>
-          </div>
+          <PasswordField
+            id="password"
+            label="Password"
+            minLength={8}
+            required
+            autoComplete="new-password"
+            hint="At least 8 characters."
+            value={form.password}
+            onChange={(e) => updateField("password", e.target.value)}
+          />
           <div className="field">
             <label htmlFor="role">Account type</label>
             <select id="role" value={form.role} onChange={(e) => updateField("role", e.target.value)}>
@@ -94,6 +99,17 @@ export default function Register() {
                 value={form.org_name}
                 onChange={(e) => updateField("org_name", e.target.value)}
               />
+            </div>
+          )}
+          {form.role === "authority" && (
+            <div className="field">
+              <label>Station / office location</label>
+              <p className="field-hint" style={{ marginTop: 0, marginBottom: "8px" }}>
+                Cases are routed to the nearest station instead of every authority
+                nationwide, so this matters for what you'll see in your queue. You can
+                also set or update it later from your profile.
+              </p>
+              <LocationPicker value={jurisdictionLocation} onChange={setJurisdictionLocation} />
             </div>
           )}
           <button className="btn btn-primary btn-block" type="submit" disabled={isSubmitting}>

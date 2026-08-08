@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { approveCase, claimCase, dismissCase, getCase, updateCaseStatus } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { listSightingsForCase } from "../api/sightings";
+import ShareCaseForm from "../components/ShareCaseForm";
 import SightingForm from "../components/SightingForm";
 import StatusBadge from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
@@ -19,6 +20,7 @@ export default function CaseDetail() {
   const [error, setError] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   const loadCase = useCallback(async () => {
     try {
@@ -191,6 +193,17 @@ export default function CaseDetail() {
               </select>
             </div>
           )}
+
+          {(isAssignedAuthority || isAdmin) && !isSharing && (
+            <button
+              className="btn btn-secondary"
+              style={{ marginTop: 16 }}
+              onClick={() => setIsSharing(true)}
+            >
+              Share with another authority
+            </button>
+          )}
+          {isSharing && <ShareCaseForm caseId={caseItem.id} onClose={() => setIsSharing(false)} />}
         </div>
       </div>
 
