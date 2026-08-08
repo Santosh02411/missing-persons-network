@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 
 from fastapi import HTTPException, status
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.cache import bump_cases_list_version
 from app.core.config import settings
-from app.core.email import send_email
+from app.core.email import send_email, sender_address_for
 from app.models.audit_log import AuditLog
 from app.models.case import Case, CaseStatus
 from app.models.user import User, UserRole
@@ -376,6 +377,17 @@ def _load_case_photo(case: Case) -> tuple[str, bytes] | None:
         return None
 
 
+def _sender_local_part(actor: User) -> str:
+    """A stable, human-readable, collision-safe local-part for
+    sender_address_for(), e.g. "belagavi-city-police-4f3a2c1e" for an
+    authority named "Belagavi City Police" -- same every time for the same
+    account (deterministic from org_name/full_name + user id), unique across
+    accounts even if two stations share a display name."""
+    source = actor.org_name or actor.full_name or "authority"
+    slug = re.sub(r"[^a-z0-9]+", "-", source.lower()).strip("-") or "authority"
+    return f"{slug}-{actor.id.hex[:8]}"
+
+
 def share_case(db: Session, case: Case, payload: CaseShareRequest, actor: User) -> None:
     """Emails the case's full details -- plus the case photo as a soft copy,
     when one exists -- to another police/NGO authority, and includes a
@@ -460,6 +472,19 @@ def share_case(db: Session, case: Case, payload: CaseShareRequest, actor: User) 
         subject=f"Case shared: {case.name} — Reunification Network",
         body=body,
         attachments=attachments,
+        # Visibly from the sharing authority, not a generic system/admin
+        # address. from_email is the per-authority alias under YOUR
+        # verified sending domain (only takes effect with a domain-verified
+        # provider -- see core/email.py; on plain Gmail SMTP it's ignored
+        # and SMTP_FROM_EMAIL is used instead, with just the display name
+        # and Reply-To personalized).
+        from_display_name=(
+            f"{actor.full_name} ({actor.org_name})"
+            if actor.org_name
+            else actor.full_name
+        ),
+        from_email=sender_address_for(_sender_local_part(actor)),
+        reply_to=actor.email,
     )
 
     db.add(

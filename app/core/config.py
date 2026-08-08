@@ -45,6 +45,19 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = ""
     SMTP_USE_TLS: bool = True
 
+    # Optional: lets case_service.share_case send each shared case from a
+    # per-authority address under YOUR OWN verified domain, e.g.
+    # "belagavi-city-police-4f3a@mail.reunificationnetwork.org" instead of
+    # every share coming from the single SMTP_FROM_EMAIL address. This ONLY
+    # works with an email provider that does domain-level DKIM signing
+    # (SendGrid, Postmark, AWS SES, Mailgun, etc. with the domain verified)
+    # -- NOT with Gmail SMTP + an App Password, which only lets you send as
+    # the one authenticated mailbox (or an explicitly-verified "Send As"
+    # alias in that account) and will reject or rewrite anything else.
+    # Leave blank to keep using SMTP_FROM_EMAIL for everything (the default,
+    # and the only option that works with plain Gmail SMTP).
+    SMTP_SENDING_DOMAIN: str = ""
+
     # Photo uploads
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024  # 5MB
