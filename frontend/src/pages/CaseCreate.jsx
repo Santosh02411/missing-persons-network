@@ -11,6 +11,7 @@ export default function CaseCreate() {
   const [form, setForm] = useState({
     name: "",
     age_at_disappearance: "",
+    gender: "",
     photo_url: "",
     description: "",
     last_seen_address: "",
@@ -41,6 +42,7 @@ export default function CaseCreate() {
         age_at_disappearance: form.age_at_disappearance
           ? Number(form.age_at_disappearance)
           : null,
+        gender: form.gender || null,
         photo_url: form.photo_url || null,
         description: form.description,
         last_seen_location: location,
@@ -94,6 +96,16 @@ export default function CaseCreate() {
                 value={form.last_seen_at}
                 onChange={(e) => updateField("last_seen_at", e.target.value)}
               />
+            </div>
+            <div className="field">
+              <label htmlFor="gender">Gender (optional)</label>
+              <select id="gender" value={form.gender} onChange={(e) => updateField("gender", e.target.value)}>
+                <option value="">Prefer not to specify</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+                <option value="unknown">Unknown</option>
+              </select>
             </div>
           </div>
 

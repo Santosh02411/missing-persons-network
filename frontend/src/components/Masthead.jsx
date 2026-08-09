@@ -50,6 +50,7 @@ export default function Masthead() {
           {isAuthenticated ? (
             <>
               <Link to="/">Browse cases</Link>
+              <Link to="/reunited">Reunited</Link>
               {dashboard && <Link to={dashboard.to}>{dashboard.label}</Link>}
               {user.role === "admin" && (
                 <Link to="/dashboard/authority">Authority queue</Link>

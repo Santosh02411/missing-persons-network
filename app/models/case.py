@@ -29,6 +29,13 @@ class Case(Base):
     photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # Free-text, not a DB enum -- deliberately open-ended (not limited to a
+    # fixed set) since a missing-persons registry shouldn't force reporters
+    # into categories that don't fit. Optional: many reports won't specify
+    # it. Used as a search filter (case_service.list_cases), not shown as a
+    # primary identifying feature anywhere in the UI.
+    gender: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
     # PostGIS point: SRID 4326 = standard WGS84 lat/lng
     last_seen_location: Mapped[str] = mapped_column(
         Geography(geometry_type="POINT", srid=4326), nullable=False

@@ -1,5 +1,6 @@
 import re
 import uuid
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -57,6 +58,7 @@ def create_case(db: Session, payload: CaseCreate, reporter: User) -> Case:
         created_by=reporter.id,
         name=payload.name,
         age_at_disappearance=payload.age_at_disappearance,
+        gender=payload.gender,
         photo_url=payload.photo_url,
         description=payload.description,
         last_seen_location=to_geography(payload.last_seen_location),
@@ -127,7 +129,18 @@ def list_assigned_cases(db: Session, authority_id) -> list[Case]:
     return list(db.scalars(stmt))
 
 
-def list_cases(db: Session, status_filter: CaseStatus | None, limit: int, offset: int) -> list[Case]:
+def list_cases(
+    db: Session,
+    status_filter: CaseStatus | None,
+    limit: int,
+    offset: int,
+    gender: str | None = None,
+    age_min: int | None = None,
+    age_max: int | None = None,
+    last_seen_after: datetime | None = None,
+    last_seen_before: datetime | None = None,
+    region: str | None = None,
+) -> list[Case]:
     # Never publicly listed, even if someone explicitly asks for
     # ?status=pending_review -- unapproved cases aren't public. Use
     # list_pending_approval_cases() (authority/admin only) for those.
@@ -145,6 +158,26 @@ def list_cases(db: Session, status_filter: CaseStatus | None, limit: int, offset
         CaseStatus.DISMISSED,
     ):
         stmt = stmt.where(Case.status == status_filter)
+    if gender is not None:
+        stmt = stmt.where(Case.gender == gender)
+    if age_min is not None:
+        stmt = stmt.where(Case.age_at_disappearance.isnot(None)).where(
+            Case.age_at_disappearance >= age_min
+        )
+    if age_max is not None:
+        stmt = stmt.where(Case.age_at_disappearance.isnot(None)).where(
+            Case.age_at_disappearance <= age_max
+        )
+    if last_seen_after is not None:
+        stmt = stmt.where(Case.last_seen_at >= last_seen_after)
+    if last_seen_before is not None:
+        stmt = stmt.where(Case.last_seen_at <= last_seen_before)
+    if region:
+        # Free-text match against the last-seen address -- there's no
+        # separate structured region/state/city field, so "region" search
+        # means "this text appears somewhere in the address" (e.g.
+        # "Belagavi" or "Karnataka"), not a strict administrative boundary.
+        stmt = stmt.where(Case.last_seen_address.ilike(f"%{region}%"))
     return list(db.scalars(stmt))
 
 

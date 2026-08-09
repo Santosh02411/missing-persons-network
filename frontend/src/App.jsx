@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
+import SuccessStories from "./pages/SuccessStories";
 import VerifyEmail from "./pages/VerifyEmail";
 
 export default function App() {
@@ -33,6 +34,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <CaseList />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reunited"
+                element={
+                  <ProtectedRoute>
+                    <SuccessStories />
                   </ProtectedRoute>
                 }
               />

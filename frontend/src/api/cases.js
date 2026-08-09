@@ -1,7 +1,19 @@
 import { apiClient } from "./client";
 
-export function listCases({ status, limit = 20, offset = 0 } = {}) {
-  return apiClient.get("/cases", { params: { status, limit, offset } });
+export function listCases({
+  status,
+  limit = 20,
+  offset = 0,
+  gender,
+  age_min,
+  age_max,
+  last_seen_after,
+  last_seen_before,
+  region,
+} = {}) {
+  return apiClient.get("/cases", {
+    params: { status, limit, offset, gender, age_min, age_max, last_seen_after, last_seen_before, region },
+  });
 }
 
 export function getCase(caseId) {

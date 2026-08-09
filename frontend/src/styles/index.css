@@ -458,6 +458,23 @@ main {
   background: var(--color-moss);
 }
 
+.reunited-ribbon {
+  background: var(--color-moss);
+}
+.reunited-badge {
+  background: var(--color-moss-bg);
+  color: var(--color-moss);
+}
+.reunited-hero {
+  background: linear-gradient(155deg, #1c3628 0%, #2a4d38 65%, #1c3628 100%);
+}
+.reunited-hero .hero-eyebrow {
+  color: #7fbf9a;
+}
+.reunited-hero::before {
+  background-image: radial-gradient(rgba(127, 191, 154, 0.35) 1px, transparent 1px);
+}
+
 /* ---------- Hero (Browse cases landing only — not repeated on
    every page, so it stays a real threshold rather than boilerplate) ---------- */
 .hero {

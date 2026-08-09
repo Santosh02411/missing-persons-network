@@ -24,6 +24,13 @@ export default function CaseList() {
   const [nearbyMode, setNearbyMode] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
 
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const emptyAdvanced = { gender: "", age_min: "", age_max: "", last_seen_after: "", last_seen_before: "", region: "" };
+  const [advancedInputs, setAdvancedInputs] = useState(emptyAdvanced);
+  const [appliedAdvanced, setAppliedAdvanced] = useState(emptyAdvanced);
+
+  const advancedFilterCount = Object.values(appliedAdvanced).filter(Boolean).length;
+
   // Ledger counts shown in the hero — real numbers from the same
   // endpoint the list uses, never placeholder figures.
   const [ledger, setLedger] = useState(null);
@@ -52,11 +59,29 @@ export default function CaseList() {
     if (nearbyMode) return; // nearby search is triggered explicitly, not by the filter effect
     setIsLoading(true);
     setError(null);
-    listCases({ status: statusFilter || undefined })
+    listCases({
+      status: statusFilter || undefined,
+      gender: appliedAdvanced.gender || undefined,
+      age_min: appliedAdvanced.age_min || undefined,
+      age_max: appliedAdvanced.age_max || undefined,
+      last_seen_after: appliedAdvanced.last_seen_after ? new Date(appliedAdvanced.last_seen_after).toISOString() : undefined,
+      last_seen_before: appliedAdvanced.last_seen_before ? new Date(appliedAdvanced.last_seen_before).toISOString() : undefined,
+      region: appliedAdvanced.region || undefined,
+    })
       .then(({ data }) => setCases(data))
       .catch((err) => setError(extractErrorMessage(err, "Couldn't load cases.")))
       .finally(() => setIsLoading(false));
-  }, [statusFilter, nearbyMode]);
+  }, [statusFilter, nearbyMode, appliedAdvanced]);
+
+  function handleApplyAdvancedFilters(e) {
+    e.preventDefault();
+    setAppliedAdvanced(advancedInputs);
+  }
+
+  function handleClearAdvancedFilters() {
+    setAdvancedInputs(emptyAdvanced);
+    setAppliedAdvanced(emptyAdvanced);
+  }
 
   function handleSearchNearMe() {
     if (!navigator.geolocation) {
@@ -146,6 +171,14 @@ export default function CaseList() {
           <button className="filter-chip" onClick={handleSearchNearMe} disabled={isLocating}>
             {isLocating ? "Getting your location…" : `📍 Cases near me (${NEARBY_RADIUS_KM}km)`}
           </button>
+          <button
+            className={`filter-chip${advancedFilterCount > 0 ? " active" : ""}`}
+            onClick={() => setShowMoreFilters((v) => !v)}
+            type="button"
+          >
+            {showMoreFilters ? "Hide filters" : "More filters"}
+            {advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ""}
+          </button>
         </div>
       ) : (
         <div className="filter-bar">
@@ -156,6 +189,84 @@ export default function CaseList() {
             ✕ Clear location search
           </button>
         </div>
+      )}
+
+      {showMoreFilters && !nearbyMode && (
+        <form onSubmit={handleApplyAdvancedFilters} className="dashboard-card" style={{ marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="filter-gender">Gender</label>
+              <select
+                id="filter-gender"
+                value={advancedInputs.gender}
+                onChange={(e) => setAdvancedInputs({ ...advancedInputs, gender: e.target.value })}
+              >
+                <option value="">Any</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="filter-age-min">Age (min)</label>
+              <input
+                id="filter-age-min"
+                type="number"
+                min="0"
+                max="130"
+                value={advancedInputs.age_min}
+                onChange={(e) => setAdvancedInputs({ ...advancedInputs, age_min: e.target.value })}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="filter-age-max">Age (max)</label>
+              <input
+                id="filter-age-max"
+                type="number"
+                min="0"
+                max="130"
+                value={advancedInputs.age_max}
+                onChange={(e) => setAdvancedInputs({ ...advancedInputs, age_max: e.target.value })}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="filter-region">Region</label>
+              <input
+                id="filter-region"
+                placeholder="e.g. Belagavi"
+                value={advancedInputs.region}
+                onChange={(e) => setAdvancedInputs({ ...advancedInputs, region: e.target.value })}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="filter-date-after">Last seen after</label>
+              <input
+                id="filter-date-after"
+                type="date"
+                value={advancedInputs.last_seen_after}
+                onChange={(e) => setAdvancedInputs({ ...advancedInputs, last_seen_after: e.target.value })}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="filter-date-before">Last seen before</label>
+              <input
+                id="filter-date-before"
+                type="date"
+                value={advancedInputs.last_seen_before}
+                onChange={(e) => setAdvancedInputs({ ...advancedInputs, last_seen_before: e.target.value })}
+              />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <button type="submit" className="btn btn-primary">
+              Apply filters
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={handleClearAdvancedFilters}>
+              Clear
+            </button>
+          </div>
+        </form>
       )}
 
       {isLoading && <p className="spinner-text">Loading cases…</p>}

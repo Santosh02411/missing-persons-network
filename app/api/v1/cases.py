@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
@@ -35,6 +36,12 @@ def create_case(
 @router.get("", response_model=list[CaseListItem])
 def list_cases(
     status_filter: CaseStatus | None = Query(default=None, alias="status"),
+    gender: str | None = Query(default=None, max_length=30),
+    age_min: int | None = Query(default=None, ge=0, le=130),
+    age_max: int | None = Query(default=None, ge=0, le=130),
+    last_seen_after: datetime | None = Query(default=None),
+    last_seen_before: datetime | None = Query(default=None),
+    region: str | None = Query(default=None, max_length=255),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -45,6 +52,10 @@ def list_cases(
     an identifiable account, not anonymously. Never includes pending_review
     or dismissed cases -- see case_service.list_cases().
 
+    Supports filtering by gender, age range, last-seen date range, and
+    region (free-text match against the last-seen address) on top of the
+    existing status filter -- all optional and combinable.
+
     Cached in Redis for CASES_LIST_TTL_SECONDS. The cache key includes a
     version number (see core/cache.py) that's bumped on any case write, so
     stale results aren't served past the next create/edit/claim/status-change
@@ -54,13 +65,26 @@ def list_cases(
     across users despite the endpoint now requiring auth.
     """
     cache_key = cases_list_cache_key(
-        status_filter.value if status_filter else None, limit, offset
+        status_filter.value if status_filter else None,
+        limit,
+        offset,
+        gender,
+        age_min,
+        age_max,
+        last_seen_after.isoformat() if last_seen_after else None,
+        last_seen_before.isoformat() if last_seen_before else None,
+        region,
     )
     cached = redis_client.get(cache_key)
     if cached is not None:
         return json.loads(cached)
 
-    cases = case_service.list_cases(db, status_filter, limit, offset)
+    cases = case_service.list_cases(
+        db, status_filter, limit, offset,
+        gender=gender, age_min=age_min, age_max=age_max,
+        last_seen_after=last_seen_after, last_seen_before=last_seen_before,
+        region=region,
+    )
     result = [CaseListItem.model_validate(c).model_dump(mode="json") for c in cases]
     redis_client.set(cache_key, json.dumps(result), ex=CASES_LIST_TTL_SECONDS)
     return result

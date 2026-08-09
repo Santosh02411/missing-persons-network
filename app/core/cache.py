@@ -18,6 +18,19 @@ def bump_cases_list_version() -> None:
     redis_client.incr(CASES_LIST_VERSION_KEY)
 
 
-def cases_list_cache_key(status_filter: str | None, limit: int, offset: int) -> str:
+def cases_list_cache_key(
+    status_filter: str | None,
+    limit: int,
+    offset: int,
+    gender: str | None = None,
+    age_min: int | None = None,
+    age_max: int | None = None,
+    last_seen_after: str | None = None,
+    last_seen_before: str | None = None,
+    region: str | None = None,
+) -> str:
     version = get_cases_list_version()
-    return f"cache:cases:list:v{version}:{status_filter}:{limit}:{offset}"
+    return (
+        f"cache:cases:list:v{version}:{status_filter}:{limit}:{offset}:"
+        f"{gender}:{age_min}:{age_max}:{last_seen_after}:{last_seen_before}:{region}"
+    )

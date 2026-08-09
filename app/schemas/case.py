@@ -10,6 +10,7 @@ from app.schemas.geo import GeoPoint
 class CaseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     age_at_disappearance: int | None = Field(default=None, ge=0, le=130)
+    gender: str | None = Field(default=None, max_length=30)
     photo_url: str | None = Field(default=None, max_length=500)
     description: str = Field(min_length=1)
     last_seen_location: GeoPoint
@@ -29,6 +30,8 @@ class CaseUpdate(BaseModel):
     own audit-log write and (Phase 3) role gate."""
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    age_at_disappearance: int | None = Field(default=None, ge=0, le=130)
+    gender: str | None = Field(default=None, max_length=30)
     photo_url: str | None = Field(default=None, max_length=500)
     description: str | None = Field(default=None, min_length=1)
     last_seen_location: GeoPoint | None = None
@@ -46,6 +49,7 @@ class CaseRead(BaseModel):
     created_by: uuid.UUID
     name: str
     age_at_disappearance: int | None
+    gender: str | None
     photo_url: str | None
     description: str
     last_seen_location: GeoPoint
@@ -102,7 +106,10 @@ class CaseListItem(BaseModel):
 
     id: uuid.UUID
     name: str
+    age_at_disappearance: int | None
+    gender: str | None
     photo_url: str | None
     last_seen_address: str
+    last_seen_at: datetime
     status: CaseStatus
     created_at: datetime
