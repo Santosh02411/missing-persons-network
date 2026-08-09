@@ -14,6 +14,7 @@ from app.models.user import User, UserRole
 from app.schemas.case import CaseCreate, CaseShareRequest, CaseUpdate
 from app.services.geo_service import nearest_authority, to_geography
 from app.services.upload_service import read_upload_bytes
+from app.services import watch_service
 
 # How far case_service will look for a station to auto-route a case to when
 # the reporter didn't pick one explicitly. Beyond this, or if no authority
@@ -68,6 +69,7 @@ def create_case(db: Session, payload: CaseCreate, reporter: User) -> Case:
     db.commit()
     db.refresh(case)
     bump_cases_list_version()
+    watch_service.watch_case(db, case, reporter)
     return case
 
 
@@ -230,6 +232,12 @@ def approve_case(db: Session, case: Case, actor: User) -> Case:
     db.commit()
     db.refresh(case)
     bump_cases_list_version()
+    watch_service.notify_watchers(
+        db, case,
+        headline="This case has been approved and is now public.",
+        detail="Status: Open.",
+        exclude_user_id=actor.id,
+    )
     return case
 
 
@@ -306,6 +314,12 @@ def dismiss_case(db: Session, case: Case, actor: User, reason: str | None = None
     db.commit()
     db.refresh(case)
     bump_cases_list_version()
+    watch_service.notify_watchers(
+        db, case,
+        headline="This case has been dismissed.",
+        detail=reason or "No reason was given.",
+        exclude_user_id=actor.id,
+    )
     return case
 
 
@@ -349,6 +363,12 @@ def update_case_status(
     db.commit()
     db.refresh(case)
     bump_cases_list_version()
+    watch_service.notify_watchers(
+        db, case,
+        headline=f"This case's status changed to {new_status.value.replace('_', ' ').title()}.",
+        detail=f"Previously: {old_status.value.replace('_', ' ').title()}.",
+        exclude_user_id=actor.id,
+    )
     return case
 
 

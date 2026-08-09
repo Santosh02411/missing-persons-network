@@ -11,7 +11,7 @@ from app.models.case import Case
 from app.models.sighting import Sighting, SightingStatus
 from app.models.user import User
 from app.schemas.sighting import SightingCreate
-from app.services import face_match_service
+from app.services import face_match_service, watch_service
 from app.services.geo_service import to_geography
 from app.services.upload_service import read_upload_bytes
 
@@ -127,4 +127,13 @@ def review_sighting(
     )
     db.commit()
     db.refresh(sighting)
+    if new_status == SightingStatus.VERIFIED:
+        case = db.get(Case, sighting.case_id)
+        if case is not None:
+            watch_service.notify_watchers(
+                db, case,
+                headline="A new sighting has been verified on this case.",
+                detail=f"Reported near: {sighting.address_text}",
+                exclude_user_id=reviewer.id,
+            )
     return sighting

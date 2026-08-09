@@ -7,3 +7,4 @@ from app.models.user import User  # noqa: F401
 from app.models.case import Case  # noqa: F401
 from app.models.sighting import Sighting  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.case_watch import CaseWatch  # noqa: F401

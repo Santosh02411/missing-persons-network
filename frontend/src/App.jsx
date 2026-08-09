@@ -4,6 +4,7 @@ import Masthead from "./components/Masthead";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import AccountSecurity from "./pages/AccountSecurity";
+import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminDashboard from "./pages/AdminDashboard";
 import AuthorityDashboard from "./pages/AuthorityDashboard";
 import CaseCreate from "./pages/CaseCreate";
@@ -93,6 +94,14 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={["admin"]}>
                     <AdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/admin/analytics"
+                element={
+                  <ProtectedRoute allowedRoles={["admin"]}>
+                    <AdminAnalytics />
                   </ProtectedRoute>
                 }
               />

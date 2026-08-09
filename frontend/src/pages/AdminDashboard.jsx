@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   approveAuthorityRequest,
   deactivateUser,
@@ -76,6 +77,9 @@ export default function AdminDashboard() {
     <div className="container">
       <div className="page-header">
         <h2 style={{ margin: 0 }}>Admin dashboard</h2>
+        <Link to="/dashboard/admin/analytics" className="btn btn-secondary">
+          View analytics
+        </Link>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

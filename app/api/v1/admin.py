@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 from app.core.deps import require_role
 from app.db.session import get_db
 from app.models.user import User, UserRole
+from app.schemas.analytics import AnalyticsOverview, HeatmapPoint, VolumePoint
 from app.schemas.audit_log import AuditLogRead
 from app.schemas.user import UserRead
-from app.services import admin_service
+from app.services import admin_service, analytics_service
 
 router = APIRouter()
 
@@ -87,3 +88,41 @@ def reactivate_user(
     """Admin only."""
     user = admin_service.reactivate_user(db, user_id, admin=current_user)
     return UserRead.model_validate(user)
+
+
+@router.get("/analytics/overview", response_model=AnalyticsOverview)
+def get_analytics_overview(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+) -> AnalyticsOverview:
+    """Admin only. Status breakdown, resolution-time stats, and sighting
+    totals in one call -- backs the top stat strip of the analytics
+    dashboard."""
+    breakdown = analytics_service.status_breakdown(db)
+    return AnalyticsOverview(
+        total_cases=sum(breakdown.values()),
+        status_breakdown=breakdown,
+        resolution_time=analytics_service.resolution_time_stats(db),
+        sightings=analytics_service.sighting_totals(db),
+    )
+
+
+@router.get("/analytics/volume", response_model=list[VolumePoint])
+def get_analytics_volume(
+    weeks: int = Query(default=12, ge=1, le=52),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+) -> list[VolumePoint]:
+    """Admin only. Cases filed per week for the last `weeks` weeks --
+    backs the volume-over-time chart."""
+    return analytics_service.case_volume_by_week(db, weeks)
+
+
+@router.get("/analytics/heatmap", response_model=list[HeatmapPoint])
+def get_analytics_heatmap(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+) -> list[HeatmapPoint]:
+    """Admin only. Every case's last-seen location -- backs the regional
+    map."""
+    return analytics_service.heatmap_points(db)

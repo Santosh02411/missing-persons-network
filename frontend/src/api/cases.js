@@ -55,3 +55,19 @@ export function shareCase(caseId, payload) {
 export function getCaseFlyer(caseId) {
   return apiClient.get(`/cases/${caseId}/flyer`, { responseType: "blob" });
 }
+
+export function getWatchStatus(caseId) {
+  return apiClient.get(`/cases/${caseId}/watch`);
+}
+
+export function watchCase(caseId) {
+  return apiClient.post(`/cases/${caseId}/watch`);
+}
+
+export function unwatchCase(caseId) {
+  return apiClient.delete(`/cases/${caseId}/watch`);
+}
+
+export function watchedCases() {
+  return apiClient.get("/cases/watched");
+}

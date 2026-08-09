@@ -12,7 +12,8 @@ from app.models.case import CaseStatus
 from app.models.user import User
 from app.schemas.case import CaseCreate, CaseListItem, CaseRead, CaseShareRequest, CaseStatusUpdate, CaseUpdate
 from app.schemas.geo import GeoPoint
-from app.services import case_service, flyer_service
+from app.schemas.watch import WatchStatus
+from app.services import case_service, flyer_service, watch_service
 from app.services.geo_service import nearby_cases
 
 router = APIRouter()
@@ -93,6 +94,19 @@ def get_my_cases(
     can track what happened to their own submissions. Registered before
     /{case_id} for the usual routing-order reason."""
     cases = case_service.list_my_cases(db, current_user.id)
+    return [CaseRead.model_validate(c) for c in cases]
+
+
+@router.get("/watched", response_model=list[CaseRead])
+def get_watched_cases(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[CaseRead]:
+    """Backs the citizen dashboard's "cases I'm watching" section --
+    everything this user has subscribed to for email updates, regardless of
+    whether they filed it themselves. Registered before /{case_id} for the
+    usual routing-order reason."""
+    cases = watch_service.list_watched_cases(db, current_user.id)
     return [CaseRead.model_validate(c) for c in cases]
 
 
@@ -244,3 +258,40 @@ def get_case_flyer(
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
+
+
+@router.get("/{case_id}/watch", response_model=WatchStatus)
+def get_watch_status(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> WatchStatus:
+    """Whether the current user is watching this case -- backs the
+    watch/unwatch toggle button on the case detail page."""
+    case_service.get_case_or_404(db, case_id, current_user)  # visibility check
+    return WatchStatus(is_watching=watch_service.is_watching(db, case_id, current_user.id))
+
+
+@router.post("/{case_id}/watch", status_code=204)
+def watch_case_route(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Subscribes the current user to email updates on this case (status
+    changes, verified sightings). Idempotent -- watching an already-watched
+    case is a no-op, not an error."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    watch_service.watch_case(db, case, current_user)
+
+
+@router.delete("/{case_id}/watch", status_code=204)
+def unwatch_case_route(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Unsubscribes the current user from this case's email updates.
+    Idempotent -- unwatching a case you weren't watching is a no-op."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    watch_service.unwatch_case(db, case, current_user)

@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { approveCase, claimCase, dismissCase, getCase, getCaseFlyer, updateCaseStatus } from "../api/cases";
+import {
+  approveCase,
+  claimCase,
+  dismissCase,
+  getCase,
+  getCaseFlyer,
+  getWatchStatus,
+  unwatchCase,
+  updateCaseStatus,
+  watchCase,
+} from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { listSightingsForCase } from "../api/sightings";
 import MatchScoreBadge from "../components/MatchScoreBadge";
@@ -23,25 +33,44 @@ export default function CaseDetail() {
   const [actionBusy, setActionBusy] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isFlyerLoading, setIsFlyerLoading] = useState(false);
+  const [isWatching, setIsWatching] = useState(false);
+  const [isWatchBusy, setIsWatchBusy] = useState(false);
 
   const loadCase = useCallback(async () => {
     try {
-      const [{ data: caseData }, { data: sightingData }] = await Promise.all([
-        getCase(caseId),
-        listSightingsForCase(caseId),
-      ]);
-      setCaseItem(caseData);
-      setSightings(sightingData);
+      const requests = [getCase(caseId), listSightingsForCase(caseId)];
+      if (isAuthenticated) requests.push(getWatchStatus(caseId));
+      const results = await Promise.all(requests);
+      setCaseItem(results[0].data);
+      setSightings(results[1].data);
+      if (isAuthenticated && results[2]) setIsWatching(results[2].data.is_watching);
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't load this case."));
     } finally {
       setIsLoading(false);
     }
-  }, [caseId]);
+  }, [caseId, isAuthenticated]);
 
   useEffect(() => {
     loadCase();
   }, [loadCase]);
+
+  async function handleToggleWatch() {
+    setIsWatchBusy(true);
+    try {
+      if (isWatching) {
+        await unwatchCase(caseId);
+        setIsWatching(false);
+      } else {
+        await watchCase(caseId);
+        setIsWatching(true);
+      }
+    } catch (err) {
+      setActionError(extractErrorMessage(err, "Couldn't update your watch status."));
+    } finally {
+      setIsWatchBusy(false);
+    }
+  }
 
   async function handleDownloadFlyer() {
     setActionError(null);
@@ -145,15 +174,29 @@ export default function CaseDetail() {
             <StatusBadge status={caseItem.status} />
           </div>
 
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ marginBottom: 16, fontSize: "0.85rem", padding: "6px 12px" }}
-            onClick={handleDownloadFlyer}
-            disabled={isFlyerLoading}
-          >
-            {isFlyerLoading ? "Preparing flyer…" : "Download flyer (PDF)"}
-          </button>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: "0.85rem", padding: "6px 12px" }}
+              onClick={handleDownloadFlyer}
+              disabled={isFlyerLoading}
+            >
+              {isFlyerLoading ? "Preparing flyer…" : "Download flyer (PDF)"}
+            </button>
+
+            {isAuthenticated && (
+              <button
+                type="button"
+                className={isWatching ? "btn btn-primary" : "btn btn-secondary"}
+                style={{ fontSize: "0.85rem", padding: "6px 12px" }}
+                onClick={handleToggleWatch}
+                disabled={isWatchBusy}
+              >
+                {isWatching ? "Watching — get email updates" : "Watch this case"}
+              </button>
+            )}
+          </div>
 
           {caseItem.age_at_disappearance != null && (
             <>
