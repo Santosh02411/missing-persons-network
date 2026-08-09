@@ -1,7 +1,7 @@
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.cache import CASES_LIST_TTL_SECONDS, cases_list_cache_key
@@ -12,7 +12,7 @@ from app.models.case import CaseStatus
 from app.models.user import User
 from app.schemas.case import CaseCreate, CaseListItem, CaseRead, CaseShareRequest, CaseStatusUpdate, CaseUpdate
 from app.schemas.geo import GeoPoint
-from app.services import case_service
+from app.services import case_service, flyer_service
 from app.services.geo_service import nearby_cases
 
 router = APIRouter()
@@ -223,3 +223,24 @@ def share_case_route(
     case_service.share_case)."""
     case = case_service.get_case_or_404(db, case_id, current_user)
     case_service.share_case(db, case, payload, actor=current_user)
+
+
+@router.get("/{case_id}/flyer")
+def get_case_flyer(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    """A printable one-page PDF flyer for this case -- photo, key details,
+    and a QR code linking back to the case page for reporting a sighting.
+    Same visibility rule as GET /{case_id} (case_service.get_case_or_404):
+    a pending_review or dismissed case is only flyer-able by its reporter or
+    an authority/admin, not the general public."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    pdf_bytes = flyer_service.generate_flyer_pdf(case)
+    filename = f"missing-{case.name.replace(' ', '-').lower()}-{str(case.id)[:8]}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )

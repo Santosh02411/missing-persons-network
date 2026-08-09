@@ -31,6 +31,7 @@ class SightingRead(BaseModel):
     address_text: str
     description: str
     photo_url: str | None
+    photo_match_score: float | None
     status: SightingStatus
     reviewed_by: uuid.UUID | None
     reviewed_at: datetime | None

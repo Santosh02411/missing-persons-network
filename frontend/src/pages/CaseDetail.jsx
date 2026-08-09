@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { approveCase, claimCase, dismissCase, getCase, updateCaseStatus } from "../api/cases";
+import { approveCase, claimCase, dismissCase, getCase, getCaseFlyer, updateCaseStatus } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { listSightingsForCase } from "../api/sightings";
+import MatchScoreBadge from "../components/MatchScoreBadge";
 import ShareCaseForm from "../components/ShareCaseForm";
 import SightingForm from "../components/SightingForm";
 import StatusBadge from "../components/StatusBadge";
@@ -21,6 +22,7 @@ export default function CaseDetail() {
   const [actionError, setActionError] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [isFlyerLoading, setIsFlyerLoading] = useState(false);
 
   const loadCase = useCallback(async () => {
     try {
@@ -40,6 +42,24 @@ export default function CaseDetail() {
   useEffect(() => {
     loadCase();
   }, [loadCase]);
+
+  async function handleDownloadFlyer() {
+    setActionError(null);
+    setIsFlyerLoading(true);
+    try {
+      const { data } = await getCaseFlyer(caseId);
+      const blobUrl = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+      window.open(blobUrl, "_blank");
+      // Revoke a little later rather than immediately -- the new tab/window
+      // needs the blob URL to still be valid by the time it finishes
+      // opening and loading it.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+    } catch (err) {
+      setActionError(extractErrorMessage(err, "Couldn't generate the flyer."));
+    } finally {
+      setIsFlyerLoading(false);
+    }
+  }
 
   async function handleApproveCase() {
     setActionError(null);
@@ -124,6 +144,16 @@ export default function CaseDetail() {
             <h2 style={{ margin: 0 }}>{caseItem.name}</h2>
             <StatusBadge status={caseItem.status} />
           </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ marginBottom: 16, fontSize: "0.85rem", padding: "6px 12px" }}
+            onClick={handleDownloadFlyer}
+            disabled={isFlyerLoading}
+          >
+            {isFlyerLoading ? "Preparing flyer…" : "Download flyer (PDF)"}
+          </button>
 
           {caseItem.age_at_disappearance != null && (
             <>
@@ -218,7 +248,10 @@ export default function CaseDetail() {
             {sightings.map((s) => (
               <div key={s.id} className="sighting-item">
                 <div className="sighting-item-header">
-                  <StatusBadge status={s.status} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <StatusBadge status={s.status} />
+                    <MatchScoreBadge score={s.photo_match_score} />
+                  </div>
                   <span className="sighting-item-meta">
                     {new Date(s.created_at).toLocaleString()}
                   </span>

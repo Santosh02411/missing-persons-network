@@ -51,3 +51,7 @@ export function nearbyCases({ lat, lng, radius_km = 10, limit = 50 }) {
 export function shareCase(caseId, payload) {
   return apiClient.post(`/cases/${caseId}/share`, payload);
 }
+
+export function getCaseFlyer(caseId) {
+  return apiClient.get(`/cases/${caseId}/flyer`, { responseType: "blob" });
+}

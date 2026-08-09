@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { approveCase, assignedToMe, dismissCase, pendingApprovalCases } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { pendingSightings, reviewSighting } from "../api/sightings";
+import MatchScoreBadge from "../components/MatchScoreBadge";
 import StatusBadge from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 
@@ -157,8 +158,9 @@ export default function AuthorityDashboard() {
             {queue.map((s) => (
               <div key={s.id} className="sighting-item">
                 <div className="sighting-item-header">
-                  <div>
-                    <StatusBadge status={s.status} />{" "}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <StatusBadge status={s.status} />
+                    <MatchScoreBadge score={s.photo_match_score} />{" "}
                     <Link to={`/cases/${s.case_id}`}>{s.case_name}</Link>
                   </div>
                   <span className="sighting-item-meta">

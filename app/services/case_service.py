@@ -1,4 +1,3 @@
-import os
 import re
 import uuid
 
@@ -14,6 +13,7 @@ from app.models.case import Case, CaseStatus
 from app.models.user import User, UserRole
 from app.schemas.case import CaseCreate, CaseShareRequest, CaseUpdate
 from app.services.geo_service import nearest_authority, to_geography
+from app.services.upload_service import read_upload_bytes
 
 # How far case_service will look for a station to auto-route a case to when
 # the reporter didn't pick one explicitly. Beyond this, or if no authority
@@ -353,28 +353,14 @@ def update_case_status(
 
 
 def _load_case_photo(case: Case) -> tuple[str, bytes] | None:
-    """Reads the case's photo straight off local disk for use as an email
-    attachment, rather than making an HTTP request back to our own server.
-    photo_url is always "<base>/media/<filename>" (see api/v1/uploads.py),
-    and /media/ is a StaticFiles mount of settings.UPLOAD_DIR -- so the
-    filename after the last "/media/" segment is exactly the on-disk name.
-    Returns None (rather than raising) on any failure -- a missing/unreadable
-    photo shouldn't block sharing the rest of the case details."""
-    if not case.photo_url:
+    """(filename, bytes) for the case's photo, for use as an email
+    attachment -- thin wrapper over upload_service.read_upload_bytes() that
+    also recovers the filename, since email attachments need one."""
+    content = read_upload_bytes(case.photo_url)
+    if content is None:
         return None
-    marker = "/media/"
-    idx = case.photo_url.rfind(marker)
-    if idx == -1:
-        return None
-    filename = case.photo_url[idx + len(marker):]
-    if not filename or "/" in filename or ".." in filename:
-        return None
-    filepath = os.path.join(settings.UPLOAD_DIR, filename)
-    try:
-        with open(filepath, "rb") as f:
-            return filename, f.read()
-    except OSError:
-        return None
+    filename = case.photo_url.rsplit("/media/", 1)[-1]
+    return filename, content
 
 
 def _sender_local_part(actor: User) -> str:

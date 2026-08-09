@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from geoalchemy2 import Geography
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +34,15 @@ class Sighting(Base):
     address_text: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Face-similarity score (0..1) between this sighting's photo and the
+    # case's photo, computed once at submission time -- see
+    # face_match_service.match_faces() and sighting_service.create_sighting().
+    # NULL (not 0.0) when no score could be computed (missing photo on
+    # either side, or no face detected) -- that's a different, weaker signal
+    # than "compared and scored low", and authorities reviewing the queue
+    # need to be able to tell the two apart.
+    photo_match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # values_callable required -- see app/models/user.py's role column for
     # the full explanation of why (SQLAlchemy defaults to enum member NAME,

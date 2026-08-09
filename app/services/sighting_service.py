@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -10,7 +11,29 @@ from app.models.case import Case
 from app.models.sighting import Sighting, SightingStatus
 from app.models.user import User
 from app.schemas.sighting import SightingCreate
+from app.services import face_match_service
 from app.services.geo_service import to_geography
+from app.services.upload_service import read_upload_bytes
+
+logger = logging.getLogger("app.sightings")
+
+
+def _compute_photo_match_score(case: Case, sighting_photo_url: str | None) -> float | None:
+    """Best-effort face-similarity score between the sighting's photo and
+    the case's photo -- see face_match_service for the method and its
+    tradeoffs. Never raises: a decode/detection failure just means no score,
+    same as either photo being absent, and must not block the sighting from
+    being submitted."""
+    case_bytes = read_upload_bytes(case.photo_url)
+    sighting_bytes = read_upload_bytes(sighting_photo_url)
+    if case_bytes is None or sighting_bytes is None:
+        return None
+    try:
+        result = face_match_service.match_faces(case_bytes, sighting_bytes)
+    except Exception:
+        logger.exception("Face-match scoring failed for case %s", case.id)
+        return None
+    return result["score"]
 
 
 def list_pending_sightings(db: Session, limit: int = 50, offset: int = 0) -> list[Sighting]:
@@ -41,6 +64,7 @@ def create_sighting(db: Session, payload: SightingCreate, reporter: User | None)
         description=payload.description,
         photo_url=payload.photo_url,
         status=SightingStatus.PENDING,
+        photo_match_score=_compute_photo_match_score(case, payload.photo_url),
     )
     db.add(sighting)
     db.commit()

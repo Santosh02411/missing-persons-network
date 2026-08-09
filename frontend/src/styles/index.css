@@ -770,6 +770,30 @@ main {
   transform: translateY(-1px);
 }
 
+.match-score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.match-score-high {
+  background: var(--color-beacon-bg);
+  color: var(--color-beacon-dark);
+}
+.match-score-medium {
+  background: var(--color-amber-bg);
+  color: var(--color-amber);
+}
+.match-score-low {
+  background: var(--color-mist);
+  color: var(--color-graytext);
+}
+
 .spinner-text {
   font-family: var(--font-mono);
   font-size: 0.85rem;

@@ -49,3 +49,28 @@ async def save_upload(file: UploadFile) -> str:
             out_file.write(chunk)
 
     return filename
+
+
+def read_upload_bytes(photo_url: str | None) -> bytes | None:
+    """Reads a previously-uploaded file straight off local disk from its
+    photo_url (always "<base>/media/<filename>", see api/v1/uploads.py and
+    the /media/ StaticFiles mount in main.py), rather than making an HTTP
+    request back to our own server. Returns None (never raises) for a
+    missing photo_url, an unrecognized URL shape, or any read failure --
+    callers (case sharing, face-match scoring) treat "no photo available"
+    as an expected, non-fatal case."""
+    if not photo_url:
+        return None
+    marker = "/media/"
+    idx = photo_url.rfind(marker)
+    if idx == -1:
+        return None
+    filename = photo_url[idx + len(marker) :]
+    if not filename or "/" in filename or ".." in filename:
+        return None
+    filepath = os.path.join(settings.UPLOAD_DIR, filename)
+    try:
+        with open(filepath, "rb") as f:
+            return f.read()
+    except OSError:
+        return None
