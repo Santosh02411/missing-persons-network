@@ -2,7 +2,7 @@ import json
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.cache import CASES_LIST_TTL_SECONDS, cases_list_cache_key
@@ -11,11 +11,12 @@ from app.core.redis_client import redis_client
 from app.db.session import get_db
 from app.models.case import CaseStatus
 from app.models.user import User
+from app.schemas.bulk_import import BulkImportResult
 from app.schemas.case import CaseCreate, CaseListItem, CaseRead, CaseShareRequest, CaseStatusUpdate, CaseUpdate
 from app.schemas.collaboration import CaseNoteCreate, CaseNoteRead, CollaboratorAdd, CollaboratorRead
 from app.schemas.geo import GeoPoint
 from app.schemas.watch import WatchStatus
-from app.services import case_service, collaboration_service, flyer_service, watch_service
+from app.services import bulk_import_service, case_service, collaboration_service, flyer_service, watch_service
 from app.services.geo_service import nearby_cases
 
 router = APIRouter()
@@ -385,3 +386,21 @@ def remove_case_collaborator(
     assigned authority or an admin can remove someone."""
     case = case_service.get_case_or_404(db, case_id, current_user)
     collaboration_service.remove_collaborator(db, case, user_id, current_user)
+
+
+@router.post("/bulk-import", response_model=BulkImportResult)
+async def bulk_import_cases_route(
+    file: UploadFile,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> BulkImportResult:
+    """CSV bulk import for verified authorities/NGOs migrating existing
+    case records. Required columns: name, description, last_seen_address,
+    last_seen_lat, last_seen_lng, last_seen_at. Optional: age_at_disappearance,
+    gender, photo_url. Cases created this way go straight to OPEN with the
+    importer as the assigned authority (see bulk_import_service for why).
+    Partial success: bad rows are reported individually rather than failing
+    the whole file, up to bulk_import_service.MAX_ROWS rows per upload."""
+    file_bytes = await bulk_import_service.read_csv_upload(file)
+    result = bulk_import_service.bulk_import_cases(db, file_bytes, current_user)
+    return BulkImportResult.model_validate(result)
