@@ -103,3 +103,11 @@ export function addCaseCollaborator(caseId, authorityId) {
 export function removeCaseCollaborator(caseId, userId) {
   return apiClient.delete(`/cases/${caseId}/collaborators/${userId}`);
 }
+
+export function bulkImportCases(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient.post("/cases/bulk-import", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}

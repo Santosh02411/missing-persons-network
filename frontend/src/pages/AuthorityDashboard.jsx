@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { approveCase, assignedToMe, dismissCase, pendingApprovalCases } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { pendingSightings, reviewSighting } from "../api/sightings";
+import BulkImportForm from "../components/BulkImportForm";
 import MatchScoreBadge from "../components/MatchScoreBadge";
 import StatusBadge from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
@@ -99,6 +100,7 @@ export default function AuthorityDashboard() {
     <div className="container">
       <div className="page-header">
         <h2 style={{ margin: 0 }}>Authority dashboard</h2>
+        <BulkImportForm />
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
