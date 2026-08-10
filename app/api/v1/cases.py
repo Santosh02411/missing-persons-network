@@ -12,9 +12,10 @@ from app.db.session import get_db
 from app.models.case import CaseStatus
 from app.models.user import User
 from app.schemas.case import CaseCreate, CaseListItem, CaseRead, CaseShareRequest, CaseStatusUpdate, CaseUpdate
+from app.schemas.collaboration import CaseNoteCreate, CaseNoteRead, CollaboratorAdd, CollaboratorRead
 from app.schemas.geo import GeoPoint
 from app.schemas.watch import WatchStatus
-from app.services import case_service, flyer_service, watch_service
+from app.services import case_service, collaboration_service, flyer_service, watch_service
 from app.services.geo_service import nearby_cases
 
 router = APIRouter()
@@ -319,3 +320,68 @@ def unwatch_case_route(
     Idempotent -- unwatching a case you weren't watching is a no-op."""
     case = case_service.get_case_or_404(db, case_id, current_user)
     watch_service.unwatch_case(db, case, current_user)
+
+
+@router.get("/{case_id}/notes", response_model=list[CaseNoteRead])
+def get_case_notes(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> list[CaseNoteRead]:
+    """Private investigation-log entries -- never visible to the reporter or
+    the public, only to whoever has access to this case (see
+    case_service.has_case_access)."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    notes = collaboration_service.list_case_notes(db, case, current_user)
+    return [CaseNoteRead.model_validate(n) for n in notes]
+
+
+@router.post("/{case_id}/notes", response_model=CaseNoteRead, status_code=201)
+def create_case_note(
+    case_id: uuid.UUID,
+    payload: CaseNoteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> CaseNoteRead:
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    note = collaboration_service.add_case_note(db, case, payload.body, current_user)
+    return CaseNoteRead.model_validate(note)
+
+
+@router.get("/{case_id}/collaborators", response_model=list[CollaboratorRead])
+def get_case_collaborators(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> list[CollaboratorRead]:
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    collaborators = collaboration_service.list_collaborators(db, case, current_user)
+    return [CollaboratorRead.model_validate(c) for c in collaborators]
+
+
+@router.post("/{case_id}/collaborators", response_model=CollaboratorRead, status_code=201)
+def add_case_collaborator(
+    case_id: uuid.UUID,
+    payload: CollaboratorAdd,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> CollaboratorRead:
+    """Gives another verified authority the same access to this case as the
+    primary assigned authority. Only the case's assigned authority or an
+    admin can add collaborators (case_service.has_case_access)."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    collab = collaboration_service.add_collaborator(db, case, payload.authority_id, current_user)
+    return CollaboratorRead.model_validate(collab)
+
+
+@router.delete("/{case_id}/collaborators/{user_id}", status_code=204)
+def remove_case_collaborator(
+    case_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> None:
+    """A collaborator can remove themselves from a case; otherwise only the
+    assigned authority or an admin can remove someone."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    collaboration_service.remove_collaborator(db, case, user_id, current_user)
