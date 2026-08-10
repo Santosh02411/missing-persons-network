@@ -6,12 +6,14 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import settings
+from app.core.email import send_email
 from app.models.audit_log import AuditLog
 from app.models.case import Case
 from app.models.sighting import Sighting, SightingStatus
 from app.models.user import User
 from app.schemas.sighting import SightingCreate
-from app.services import face_match_service, watch_service
+from app.services import case_service, face_match_service, watch_service
 from app.services.geo_service import to_geography
 from app.services.upload_service import read_upload_bytes
 
@@ -51,6 +53,43 @@ def list_pending_sightings(db: Session, limit: int = 50, offset: int = 0) -> lis
     return list(db.scalars(stmt))
 
 
+def _notify_station_of_new_sighting(db: Session, case: Case, sighting: Sighting) -> None:
+    """Emails everyone with access to this case (the assigned authority plus
+    any collaborators -- see case_service.list_case_access_user_ids) the
+    moment a new sighting comes in, rather than only relying on someone
+    checking the pending-sightings queue. Best-effort: a failure here must
+    never block the sighting submission itself."""
+    user_ids = case_service.list_case_access_user_ids(db, case)
+    if not user_ids:
+        return
+    stmt = select(User).where(User.id.in_(user_ids), User.is_active.is_(True))
+    recipients = list(db.scalars(stmt))
+    if not recipients:
+        return
+
+    case_url = f"{settings.FRONTEND_URL.rstrip('/')}/cases/{case.id}"
+    body = (
+        f"A new sighting was just reported on a case you're handling.\n\n"
+        f"Case: {case.name}\n"
+        f"Reported near: {sighting.address_text}\n"
+        f"Details: {sighting.description}\n\n"
+        f"Review it here: {case_url}\n\n"
+        "You're getting this because you're the assigned authority or a "
+        "collaborator on this case."
+    )
+    for recipient in recipients:
+        try:
+            send_email(
+                to=recipient.email,
+                subject=f"New sighting reported: {case.name}",
+                body=body,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to notify %s of new sighting on case %s", recipient.id, case.id
+            )
+
+
 def create_sighting(db: Session, payload: SightingCreate, reporter: User | None) -> Sighting:
     case = db.get(Case, payload.case_id)
     if case is None:
@@ -69,6 +108,7 @@ def create_sighting(db: Session, payload: SightingCreate, reporter: User | None)
     db.add(sighting)
     db.commit()
     db.refresh(sighting)
+    _notify_station_of_new_sighting(db, case, sighting)
     return sighting
 
 

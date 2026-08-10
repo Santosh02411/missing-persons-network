@@ -238,6 +238,20 @@ def _require_target_authority_or_admin(case: Case, actor: User) -> None:
         )
 
 
+def list_case_access_user_ids(db: Session, case: Case) -> list[uuid.UUID]:
+    """Every authority account with access to this case -- the assigned
+    authority plus any collaborators (see has_case_access). Used to notify
+    "whoever is handling this case" (e.g. sighting_service notifying the
+    station immediately when a new sighting comes in), as distinct from
+    watch_service's citizen-facing watchers."""
+    ids = []
+    if case.assigned_authority_id is not None:
+        ids.append(case.assigned_authority_id)
+    stmt = select(CaseCollaborator.user_id).where(CaseCollaborator.case_id == case.id)
+    ids.extend(db.scalars(stmt))
+    return ids
+
+
 def is_case_collaborator(db: Session, case_id, user_id) -> bool:
     stmt = select(CaseCollaborator).where(
         CaseCollaborator.case_id == case_id, CaseCollaborator.user_id == user_id
