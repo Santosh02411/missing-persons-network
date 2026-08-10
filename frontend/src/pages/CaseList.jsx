@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { listCases, nearbyCases } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import CaseCard from "../components/CaseCard";
+import NearbyCasesMap from "../components/NearbyCasesMap";
 import { useAuth } from "../context/AuthContext";
 
 const FILTERS = [
@@ -23,6 +24,7 @@ export default function CaseList() {
 
   const [nearbyMode, setNearbyMode] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
 
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const emptyAdvanced = { gender: "", age_min: "", age_max: "", last_seen_after: "", last_seen_before: "", region: "" };
@@ -94,6 +96,7 @@ export default function CaseList() {
       ({ coords }) => {
         setIsLocating(false);
         setIsLoading(true);
+        setUserLocation({ lat: coords.latitude, lng: coords.longitude });
         nearbyCases({ lat: coords.latitude, lng: coords.longitude, radius_km: NEARBY_RADIUS_KM })
           .then(({ data }) => {
             setCases(data);
@@ -285,6 +288,10 @@ export default function CaseList() {
               : "Try a different status, or check back later."}
           </p>
         </div>
+      )}
+
+      {!isLoading && nearbyMode && cases.length > 0 && userLocation && (
+        <NearbyCasesMap userLocation={userLocation} cases={cases} />
       )}
 
       {!isLoading && cases.length > 0 && (

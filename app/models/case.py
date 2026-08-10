@@ -2,8 +2,8 @@ import enum
 import uuid
 
 from geoalchemy2 import Geography
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, JSON, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Computed, DateTime, Enum, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
@@ -15,6 +15,17 @@ class CaseStatus(str, enum.Enum):
     LEAD_FOUND = "lead_found"
     RESOLVED = "resolved"
     DISMISSED = "dismissed"  # rejected as invalid/fake, or closed without resolution
+
+
+# Shared between the model (below, so Base.metadata.create_all() -- what the
+# test suite uses -- creates a real generated column, not a plain nullable
+# one) and migration 0015 (what a real deployment applies via `alembic
+# upgrade head`) -- both need the identical expression, or the two schemas
+# drift and only one of them actually works.
+SEARCH_VECTOR_EXPRESSION = (
+    "to_tsvector('english', "
+    "coalesce(name, '') || ' ' || coalesce(description, '') || ' ' || coalesce(last_seen_address, ''))"
+)
 
 
 class Case(Base):
@@ -43,6 +54,14 @@ class Case(Base):
     # person must never be turned away over a name/location match. Empty
     # list (the default), not null, when nothing matched.
     possible_duplicates: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
+    # Generated (STORED) by Postgres itself from name + description +
+    # last_seen_address -- see SEARCH_VECTOR_EXPRESSION above and migration
+    # 0015. Never written to from Python, just queried against in
+    # case_service.list_cases() via func.plainto_tsquery/ts_rank.
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR, Computed(SEARCH_VECTOR_EXPRESSION, persisted=True), nullable=True, deferred=True
+    )
 
     # PostGIS point: SRID 4326 = standard WGS84 lat/lng
     last_seen_location: Mapped[str] = mapped_column(

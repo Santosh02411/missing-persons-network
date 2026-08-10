@@ -115,6 +115,18 @@ class DuplicateMatch(BaseModel):
     distance_km: float | None
 
 
+class RegistrySyncReceipt(BaseModel):
+    case_id: uuid.UUID
+    submitted_at: datetime
+    note: str
+
+
+class TimelineEvent(BaseModel):
+    timestamp: datetime
+    type: str
+    label: str
+
+
 class CaseListItem(BaseModel):
     """Slimmer shape for list views — avoids shipping the full description to a browse page."""
 
@@ -127,5 +139,15 @@ class CaseListItem(BaseModel):
     photo_url: str | None
     last_seen_address: str
     last_seen_at: datetime
+    last_seen_location: GeoPoint
     status: CaseStatus
     created_at: datetime
+
+    @field_validator("last_seen_location", mode="before")
+    @classmethod
+    def _convert_geography_list_item(cls, value):
+        from app.services.geo_service import from_geography
+
+        if isinstance(value, dict):
+            return value
+        return from_geography(value)

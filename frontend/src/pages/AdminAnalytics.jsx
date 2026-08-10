@@ -1,6 +1,10 @@
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import L from "leaflet";
 import { useEffect, useState } from "react";
-import { CircleMarker, MapContainer, TileLayer } from "react-leaflet";
+import { MapContainer, Marker, TileLayer } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import { getAnalyticsHeatmap, getAnalyticsOverview, getAnalyticsVolume } from "../api/analytics";
 import { extractErrorMessage } from "../api/client";
 
@@ -19,6 +23,24 @@ const STATUS_LABELS = {
   pending_review: "Pending review",
   dismissed: "Dismissed",
 };
+
+// leaflet.markercluster (via react-leaflet-cluster) only clusters actual
+// L.Marker instances, not vector layers like CircleMarker -- so status
+// color-coding here has to come from a small colored-dot divIcon instead
+// of the CircleMarker fill/stroke used elsewhere in the app.
+const _iconCache = {};
+function statusDotIcon(status) {
+  const color = STATUS_COLORS[status] || "#3d5a80";
+  if (!_iconCache[color]) {
+    _iconCache[color] = L.divIcon({
+      className: "",
+      html: `<span style="display:block;width:14px;height:14px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></span>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+  }
+  return _iconCache[color];
+}
 
 function StatCard({ label, value, hint }) {
   return (
@@ -180,19 +202,11 @@ export default function AdminAnalytics() {
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                {heatmap.map((p, i) => (
-                  <CircleMarker
-                    key={i}
-                    center={[p.lat, p.lng]}
-                    radius={7}
-                    pathOptions={{
-                      color: STATUS_COLORS[p.status] || "var(--color-slate)",
-                      fillColor: STATUS_COLORS[p.status] || "var(--color-slate)",
-                      fillOpacity: 0.35,
-                      weight: 1,
-                    }}
-                  />
-                ))}
+                <MarkerClusterGroup chunkedLoading>
+                  {heatmap.map((p, i) => (
+                    <Marker key={i} position={[p.lat, p.lng]} icon={statusDotIcon(p.status)} />
+                  ))}
+                </MarkerClusterGroup>
               </MapContainer>
             </div>
             <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>

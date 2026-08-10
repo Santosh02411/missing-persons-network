@@ -2,7 +2,7 @@ import json
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, status as http_status
 from sqlalchemy.orm import Session
 
 from app.core.cache import CASES_LIST_TTL_SECONDS, cases_list_cache_key
@@ -21,11 +21,22 @@ from app.schemas.case import (
     CaseUpdate,
     DuplicateCheckRequest,
     DuplicateMatch,
+    RegistrySyncReceipt,
+    TimelineEvent,
 )
 from app.schemas.collaboration import CaseNoteCreate, CaseNoteRead, CollaboratorAdd, CollaboratorRead
 from app.schemas.geo import GeoPoint
 from app.schemas.watch import WatchStatus
-from app.services import bulk_import_service, case_service, collaboration_service, duplicate_detection_service, flyer_service, watch_service
+from app.services import (
+    bulk_import_service,
+    case_service,
+    collaboration_service,
+    duplicate_detection_service,
+    flyer_service,
+    registry_export_service,
+    timeline_service,
+    watch_service,
+)
 from app.services.geo_service import nearby_cases
 
 router = APIRouter()
@@ -75,6 +86,7 @@ def list_cases(
     last_seen_after: datetime | None = Query(default=None),
     last_seen_before: datetime | None = Query(default=None),
     region: str | None = Query(default=None, max_length=255),
+    q: str | None = Query(default=None, max_length=255),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -87,7 +99,12 @@ def list_cases(
 
     Supports filtering by gender, age range, last-seen date range, and
     region (free-text match against the last-seen address) on top of the
-    existing status filter -- all optional and combinable.
+    existing status filter -- all optional and combinable. `q` is full-text
+    search across name + description + last-seen address (Postgres
+    to_tsvector/plainto_tsquery, see migration 0015) -- handles word
+    stemming and multi-word "any of these" matching, unlike `region`'s
+    plain substring match; when `q` is set, results are ranked by match
+    quality (ts_rank) instead of newest-first.
 
     Cached in Redis for CASES_LIST_TTL_SECONDS. The cache key includes a
     version number (see core/cache.py) that's bumped on any case write, so
@@ -107,6 +124,7 @@ def list_cases(
         last_seen_after.isoformat() if last_seen_after else None,
         last_seen_before.isoformat() if last_seen_before else None,
         region,
+        q,
     )
     cached = redis_client.get(cache_key)
     if cached is not None:
@@ -116,7 +134,7 @@ def list_cases(
         db, status_filter, limit, offset,
         gender=gender, age_min=age_min, age_max=age_max,
         last_seen_after=last_seen_after, last_seen_before=last_seen_before,
-        region=region,
+        region=region, q=q,
     )
     result = [CaseListItem.model_validate(c).model_dump(mode="json") for c in cases]
     redis_client.set(cache_key, json.dumps(result), ex=CASES_LIST_TTL_SECONDS)
@@ -435,3 +453,63 @@ async def bulk_import_cases_route(
     file_bytes = await bulk_import_service.read_csv_upload(file)
     result = bulk_import_service.bulk_import_cases(db, file_bytes, current_user)
     return BulkImportResult.model_validate(result)
+
+
+@router.get("/{case_id}/timeline", response_model=list[TimelineEvent])
+def get_case_timeline_route(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[TimelineEvent]:
+    """A single chronological view of the case -- filed, approved, status
+    changes, sightings reported/reviewed, dismissed. Shows extra
+    investigation-internal events (sharing, collaborators) only to the
+    case's reporter or whoever has case access; see timeline_service."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    events = timeline_service.get_case_timeline(db, case, current_user)
+    return [TimelineEvent.model_validate(e) for e in events]
+
+
+@router.get("/{case_id}/export/ncmec")
+def export_case_ncmec_xml(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> Response:
+    """Generates an NCMEC-style XML export of this case. This is a
+    document-generation stub, NOT a live integration with any external
+    registry -- see registry_export_service module docstring for why (no
+    credential-free public API exists for this). Restricted to whoever has
+    case access, same as sharing and notes -- this is an official-looking
+    export action, not casual browsing."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    if not case_service.has_case_access(db, case, current_user):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned authority, a collaborator on this case, or an admin can export it",
+        )
+    xml_content = registry_export_service.build_ncmec_style_xml(case)
+    return Response(
+        content=xml_content,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="case-{case.id}-ncmec.xml"'},
+    )
+
+
+@router.post("/{case_id}/export/ncmec/sync", response_model=RegistrySyncReceipt)
+def sync_case_to_registry_stub(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> RegistrySyncReceipt:
+    """Records a simulated national-registry submission -- makes NO external
+    network call (see registry_export_service). Same access restriction as
+    the XML export above."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    if not case_service.has_case_access(db, case, current_user):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned authority, a collaborator on this case, or an admin can do this",
+        )
+    receipt = registry_export_service.record_registry_sync_stub(db, case, current_user)
+    return RegistrySyncReceipt.model_validate(receipt)

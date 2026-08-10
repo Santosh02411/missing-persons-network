@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.cache import bump_cases_list_version
@@ -150,19 +150,25 @@ def list_cases(
     last_seen_after: datetime | None = None,
     last_seen_before: datetime | None = None,
     region: str | None = None,
+    q: str | None = None,
 ) -> list[Case]:
     # Never publicly listed, even if someone explicitly asks for
     # ?status=pending_review -- unapproved cases aren't public. Use
     # list_pending_approval_cases() (authority/admin only) for those.
     # Dismissed (rejected/invalid) cases are excluded from the public list
     # the same way -- they're not something the public needs to browse.
-    stmt = (
-        select(Case)
-        .where(Case.status.not_in([CaseStatus.PENDING_REVIEW, CaseStatus.DISMISSED]))
-        .order_by(Case.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    tsquery = func.plainto_tsquery("english", q) if q else None
+    stmt = select(Case).where(Case.status.not_in([CaseStatus.PENDING_REVIEW, CaseStatus.DISMISSED]))
+    if tsquery is not None:
+        # Ranked by match quality when searching -- recency (the normal
+        # sort) stops being the useful order once a search term narrows the
+        # results, since "best match" and "newest" aren't the same thing.
+        stmt = stmt.where(Case.search_vector.op("@@")(tsquery)).order_by(
+            func.ts_rank(Case.search_vector, tsquery).desc()
+        )
+    else:
+        stmt = stmt.order_by(Case.created_at.desc())
+    stmt = stmt.limit(limit).offset(offset)
     if status_filter is not None and status_filter not in (
         CaseStatus.PENDING_REVIEW,
         CaseStatus.DISMISSED,
