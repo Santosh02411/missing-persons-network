@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.email import send_email, sender_address_for
 from app.models.audit_log import AuditLog
 from app.models.case import Case, CaseStatus
+from app.models.case_collaborator import CaseCollaborator
 from app.models.user import User, UserRole
 from app.schemas.case import CaseCreate, CaseShareRequest, CaseUpdate
 from app.services.geo_service import nearest_authority, to_geography
@@ -196,9 +197,8 @@ def update_case(db: Session, case: Case, payload: CaseUpdate, current_user: User
     # authority/admin to be "assigned" at all) is enforced via require_role()
     # at the route level for the status endpoint; this is the row-level half.
     is_owner = case.created_by == current_user.id
-    is_assigned_authority = (
-        current_user.role == UserRole.AUTHORITY
-        and case.assigned_authority_id == current_user.id
+    is_assigned_authority = current_user.role == UserRole.AUTHORITY and has_case_access(
+        db, case, current_user
     )
     is_admin = current_user.role == UserRole.ADMIN
 
@@ -236,6 +236,31 @@ def _require_target_authority_or_admin(case: Case, actor: User) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This case was filed with a different police station or NGO authority.",
         )
+
+
+def is_case_collaborator(db: Session, case_id, user_id) -> bool:
+    stmt = select(CaseCollaborator).where(
+        CaseCollaborator.case_id == case_id, CaseCollaborator.user_id == user_id
+    )
+    return db.scalars(stmt).first() is not None
+
+
+def has_case_access(db: Session, case: Case, user: User) -> bool:
+    """The single check behind every "assigned authority or admin" action
+    on a case (editing, status changes, sharing, notes, adding more
+    collaborators) -- an admin always has access; an authority has access
+    if they're the case's primary assigned_authority OR a collaborator
+    added via case_collaborators (multi-authority collaboration). A
+    reporter never has case access through this check, even for their own
+    case -- ownership is a separate, narrower check (see update_case's
+    is_owner) that doesn't extend to these authority-level actions."""
+    if user.role == UserRole.ADMIN:
+        return True
+    if user.role != UserRole.AUTHORITY:
+        return False
+    if case.assigned_authority_id == user.id:
+        return True
+    return is_case_collaborator(db, case.id, user.id)
 
 
 def approve_case(db: Session, case: Case, actor: User) -> Case:
@@ -325,7 +350,7 @@ def dismiss_case(db: Session, case: Case, actor: User, reason: str | None = None
         and (case.target_authority_id is None or case.target_authority_id == actor.id)
     )
     is_assigned_authority = (
-        actor.role == UserRole.AUTHORITY and case.assigned_authority_id == actor.id
+        actor.role == UserRole.AUTHORITY and has_case_access(db, case, actor)
     )
     if not (is_admin or is_targeted_pending or is_assigned_authority):
         raise HTTPException(
@@ -371,9 +396,10 @@ def update_case_status(
 
     # Route-level require_verified_authority_or_admin already ensures actor's
     # role qualifies; this enforces the row-level rule that only *this
-    # case's* assigned authority (or an admin) may change its status.
+    # case's* assigned authority, a collaborator, or an admin may change its
+    # status.
     is_assigned_authority = (
-        actor.role == UserRole.AUTHORITY and case.assigned_authority_id == actor.id
+        actor.role == UserRole.AUTHORITY and has_case_access(db, case, actor)
     )
     is_admin = actor.role == UserRole.ADMIN
     if not (is_assigned_authority or is_admin):
@@ -435,12 +461,12 @@ def share_case(db: Session, case: Case, payload: CaseShareRequest, actor: User) 
     a station not yet on the platform (to_email) works; exactly one must be
     given (validated below).
 
-    Restricted to the case's assigned authority or an admin -- sharing is
-    part of an active investigation being coordinated, not something any
-    authority can do to any case."""
+    Restricted to the case's assigned authority, a collaborator, or an admin
+    -- sharing is part of an active investigation being coordinated, not
+    something any authority can do to any case."""
     is_admin = actor.role == UserRole.ADMIN
     is_assigned_authority = (
-        actor.role == UserRole.AUTHORITY and case.assigned_authority_id == actor.id
+        actor.role == UserRole.AUTHORITY and has_case_access(db, case, actor)
     )
     if not (is_admin or is_assigned_authority):
         raise HTTPException(
