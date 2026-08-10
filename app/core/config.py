@@ -58,6 +58,19 @@ class Settings(BaseSettings):
     # and the only option that works with plain Gmail SMTP).
     SMTP_SENDING_DOMAIN: str = ""
 
+    # SMS sending, for SMS-based two-factor auth (app/core/sms.py). "console"
+    # (default) just logs the code -- no setup needed, safe for anyone
+    # cloning this project. Switch to "twilio" and fill in the TWILIO_*
+    # settings to send real text messages. There's no free/no-signup SMS
+    # option analogous to Gmail for email -- every real SMS provider requires
+    # an account and a purchased/verified sending number, so "console" is
+    # the only zero-setup option here (not a lesser default, just the honest
+    # one for a project meant to run locally out of the box).
+    SMS_BACKEND: str = "console"
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_FROM_NUMBER: str = ""
+
     # Photo uploads
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024  # 5MB

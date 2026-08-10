@@ -72,6 +72,17 @@ class User(Base):
     # enforced in auth_service, not at the DB level.
     email_otp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # Alternative to TOTP/email OTP -- a fresh code sent via SMS at each
+    # login instead. Same no-secret-stored design as email OTP: each code is
+    # generated, sent, and checked against Redis (see auth_service). Only
+    # one of totp_enabled/email_otp_enabled/sms_otp_enabled should be true
+    # at a time -- enforced in auth_service, not at the DB level.
+    # phone_number is only set once SMS OTP setup is actually confirmed
+    # (mirrors totp_secret being set during pending TOTP setup) -- nullable
+    # since most accounts never use this method.
+    phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    sms_otp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     cases_reported = relationship(
         "Case", back_populates="reporter", foreign_keys="Case.created_by"
     )

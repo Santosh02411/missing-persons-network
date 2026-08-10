@@ -104,6 +104,10 @@ export function removeCaseCollaborator(caseId, userId) {
   return apiClient.delete(`/cases/${caseId}/collaborators/${userId}`);
 }
 
+export function checkDuplicates(payload) {
+  return apiClient.post("/cases/check-duplicates", payload);
+}
+
 export function bulkImportCases(file) {
   const formData = new FormData();
   formData.append("file", file);

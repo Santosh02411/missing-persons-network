@@ -52,7 +52,7 @@ class LoginResult(BaseModel):
     token_type: str = "bearer"
     mfa_required: bool = False
     mfa_token: str | None = None
-    mfa_method: str | None = None  # "totp" | "email_otp"
+    mfa_method: str | None = None  # "totp" | "email_otp" | "sms_otp"
 
 
 class TwoFactorSetupResponse(BaseModel):
@@ -67,6 +67,10 @@ class TwoFactorCodeRequest(BaseModel):
 class TwoFactorLoginRequest(BaseModel):
     mfa_token: str
     code: str = Field(min_length=6, max_length=6)
+
+
+class SmsOtpSetupRequest(BaseModel):
+    phone_number: str = Field(min_length=8, max_length=32)
 
 
 class SessionRead(BaseModel):

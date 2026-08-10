@@ -56,6 +56,8 @@ class UserRead(BaseModel):
     email_verified: bool
     totp_enabled: bool
     email_otp_enabled: bool
+    sms_otp_enabled: bool
+    phone_number: str | None = None
     org_name: str | None = None
     jurisdiction_location: GeoPoint | None = None
 

@@ -5,12 +5,15 @@ import {
   deleteSession,
   disable2FA,
   disableEmailOtp,
+  disableSmsOtp,
   listSessions,
   logoutAll,
   setup2FA,
   setupEmailOtp,
+  setupSmsOtp,
   verify2FASetup,
   verifyEmailOtpSetup,
+  verifySmsOtpSetup,
 } from "../api/auth";
 import { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
@@ -33,8 +36,13 @@ export default function AccountSecurity() {
   const [emailOtpPending, setEmailOtpPending] = useState(false);
   const [emailOtpCode, setEmailOtpCode] = useState("");
 
+  // SMS OTP setup flow state
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [smsOtpPending, setSmsOtpPending] = useState(false);
+  const [smsOtpCode, setSmsOtpCode] = useState("");
+
   // Which method to offer setting up when neither is enabled yet
-  const [chosenMethod, setChosenMethod] = useState(null); // "totp" | "email_otp"
+  const [chosenMethod, setChosenMethod] = useState(null); // "totp" | "email_otp" | "sms_otp"
 
   async function loadSessions() {
     setIsLoadingSessions(true);
@@ -53,7 +61,7 @@ export default function AccountSecurity() {
   }, []);
 
   const canUse2FA = user.role === "authority" || user.role === "admin";
-  const anyMethodEnabled = user.totp_enabled || user.email_otp_enabled;
+  const anyMethodEnabled = user.totp_enabled || user.email_otp_enabled || user.sms_otp_enabled;
 
   // --- TOTP handlers ---
   async function handleStartTotpSetup() {
@@ -143,6 +151,51 @@ export default function AccountSecurity() {
     }
   }
 
+  // --- SMS OTP handlers ---
+  async function handleStartSmsOtpSetup(e) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await setupSmsOtp(phoneNumber);
+      setSmsOtpPending(true);
+      setMessage("A confirmation code has been sent by SMS.");
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't start SMS-based two-factor setup."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirmSmsOtpSetup(e) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await verifySmsOtpSetup(smsOtpCode);
+      setMessage("SMS-based two-factor authentication is now enabled.");
+      window.location.reload();
+    } catch (err) {
+      setError(extractErrorMessage(err, "Incorrect or expired code."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDisableSmsOtp() {
+    setError(null);
+    setBusy(true);
+    try {
+      await disableSmsOtp();
+      setMessage("SMS-based two-factor authentication has been disabled.");
+      window.location.reload();
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't disable SMS-based two-factor authentication."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleRevokeSession(sessionId) {
     setError(null);
     try {
@@ -206,6 +259,16 @@ export default function AccountSecurity() {
               will be emailed to you at every login.
             </p>
             <button className="btn btn-danger" onClick={handleDisableEmailOtp} disabled={busy}>
+              Disable two-factor authentication
+            </button>
+          </div>
+        ) : user.sms_otp_enabled ? (
+          <div className="form-card" style={{ maxWidth: 420, margin: 0 }}>
+            <p>
+              Two-factor authentication is <strong>enabled</strong> (SMS code method). A code
+              will be texted to <strong>{user.phone_number}</strong> at every login.
+            </p>
+            <button className="btn btn-danger" onClick={handleDisableSmsOtp} disabled={busy}>
               Disable two-factor authentication
             </button>
           </div>
@@ -277,18 +340,86 @@ export default function AccountSecurity() {
               Cancel
             </button>
           </div>
+        ) : chosenMethod === "sms_otp" && smsOtpPending ? (
+          <div className="form-card" style={{ maxWidth: 420, margin: 0 }}>
+            <p className="field-hint" style={{ marginTop: 0 }}>
+              Check your phone for a 6-digit confirmation code and enter it below.
+            </p>
+            <form onSubmit={handleConfirmSmsOtpSetup}>
+              <div className="field">
+                <label htmlFor="sms_otp_code">Code from the text message</label>
+                <input
+                  id="sms_otp_code"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  value={smsOtpCode}
+                  onChange={(e) => setSmsOtpCode(e.target.value)}
+                />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={busy}>
+                Confirm and enable
+              </button>
+            </form>
+            <button
+              className="btn btn-secondary"
+              style={{ marginTop: 8 }}
+              onClick={() => { setSmsOtpPending(false); setChosenMethod(null); }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : chosenMethod === "sms_otp" ? (
+          <div className="form-card" style={{ maxWidth: 420, margin: 0 }}>
+            <p className="field-hint" style={{ marginTop: 0 }}>
+              Enter the phone number that should receive login codes, including the country
+              code (e.g. +91XXXXXXXXXX).
+            </p>
+            <form onSubmit={handleStartSmsOtpSetup}>
+              <div className="field">
+                <label htmlFor="phone_number">Phone number</label>
+                <input
+                  id="phone_number"
+                  type="tel"
+                  required
+                  autoFocus
+                  placeholder="+91XXXXXXXXXX"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={busy}>
+                Send confirmation code
+              </button>
+            </form>
+            <button
+              className="btn btn-secondary"
+              style={{ marginTop: 8 }}
+              onClick={() => setChosenMethod(null)}
+            >
+              Cancel
+            </button>
+          </div>
         ) : (
           <div>
             <p className="field-hint">
               Not enabled. Two-factor auth adds a second step at login, on top of your password.
               Choose a method:
             </p>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button className="btn btn-primary" onClick={handleStartTotpSetup} disabled={busy}>
                 Use an authenticator app (scan a QR code)
               </button>
               <button className="btn btn-secondary" onClick={handleStartEmailOtpSetup} disabled={busy}>
                 Email me a code at login instead
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setChosenMethod("sms_otp")}
+                disabled={busy}
+              >
+                Text me a code at login instead
               </button>
             </div>
           </div>

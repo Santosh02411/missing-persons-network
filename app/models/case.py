@@ -2,7 +2,7 @@ import enum
 import uuid
 
 from geoalchemy2 import Geography
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +35,14 @@ class Case(Base):
     # it. Used as a search filter (case_service.list_cases), not shown as a
     # primary identifying feature anywhere in the UI.
     gender: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
+    # Computed once at filing time (see duplicate_detection_service), not
+    # re-evaluated later -- a snapshot of what looked like a possible
+    # duplicate when this case was created, for the reviewing authority to
+    # see during approval. Never used to block filing a case; a real missing
+    # person must never be turned away over a name/location match. Empty
+    # list (the default), not null, when nothing matched.
+    possible_duplicates: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
 
     # PostGIS point: SRID 4326 = standard WGS84 lat/lng
     last_seen_location: Mapped[str] = mapped_column(

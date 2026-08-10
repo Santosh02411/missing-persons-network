@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.email import send_email
+from app.core.sms import send_sms
 from app.core.redis_client import redis_client
 from app.core.security import hash_password, verify_password
 from app.core.totp import generate_totp_secret, get_provisioning_uri, verify_totp_code
@@ -360,6 +361,16 @@ def start_totp_setup(db: Session, user: User) -> tuple[str, str]:
             status_code=status.HTTP_409_CONFLICT,
             detail="Two-factor authentication is already enabled. Disable it first to set up a new authenticator.",
         )
+    if user.email_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have email-based 2FA enabled. Disable it first to switch methods.",
+        )
+    if user.sms_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have SMS-based 2FA enabled. Disable it first to switch methods.",
+        )
     secret = generate_totp_secret()
     user.totp_secret = secret
     db.commit()
@@ -422,6 +433,11 @@ def start_email_otp_setup(db: Session, user: User) -> None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="You already have authenticator-app 2FA enabled. Disable it first to switch methods.",
+        )
+    if user.sms_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have SMS-based 2FA enabled. Disable it first to switch methods.",
         )
     code = _generate_otp_code()
     redis_client.set(f"{SETUP_OTP_PREFIX}:{user.id}", code, ex=SETUP_OTP_TTL_SECONDS)
@@ -490,3 +506,99 @@ def verify_login_otp(user_id, code: str) -> bool:
         return False
     redis_client.delete(key)  # single use
     return True
+
+
+# ---------------------------------------------------------------------------
+# Two-factor auth: SMS OTP (second alternative to TOTP)
+# ---------------------------------------------------------------------------
+# Same no-secret-stored design as email OTP, and reuses the same Redis key
+# prefixes/TTLs and _generate_otp_code() -- the code format and verification
+# logic are identical, only the delivery channel (SMS vs email) and the
+# enabling flag differ. verify_login_otp() above already works for both.
+
+
+def start_sms_otp_setup(db: Session, user: User, phone_number: str) -> None:
+    """Sends a confirmation code by SMS to the given number -- proves the
+    person setting this up actually controls that phone before enabling it.
+    The number isn't saved to the account until confirm_sms_otp_setup
+    succeeds, same as totp_secret staying provisional until TOTP setup is
+    confirmed."""
+    if user.sms_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="SMS OTP is already enabled. Disable it first to reconfigure.",
+        )
+    if user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have authenticator-app 2FA enabled. Disable it first to switch methods.",
+        )
+    if user.email_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have email-based 2FA enabled. Disable it first to switch methods.",
+        )
+    code = _generate_otp_code()
+    # Stash the pending phone number alongside the code so
+    # confirm_sms_otp_setup can save the *verified* number, not whatever the
+    # request claims at confirmation time (the two calls could otherwise
+    # race with a different number in between).
+    redis_client.set(
+        f"{SETUP_OTP_PREFIX}:{user.id}", json.dumps({"code": code, "phone_number": phone_number}),
+        ex=SETUP_OTP_TTL_SECONDS,
+    )
+    send_sms(
+        to=phone_number,
+        body=f"Your Reunification Network confirmation code is: {code}. Expires in 10 minutes.",
+    )
+
+
+def confirm_sms_otp_setup(db: Session, user: User, code: str) -> User:
+    key = f"{SETUP_OTP_PREFIX}:{user.id}"
+    stored = redis_client.get(key)
+    invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Incorrect or expired code. Request a new one and try again.",
+    )
+    if stored is None:
+        raise invalid
+    try:
+        pending = json.loads(stored)
+    except (TypeError, ValueError):
+        raise invalid
+    if pending.get("code") != code:
+        raise invalid
+    redis_client.delete(key)
+    user.phone_number = pending["phone_number"]
+    user.sms_otp_enabled = True
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def disable_sms_otp(db: Session, user: User) -> User:
+    """No code challenge required to disable -- same reasoning as
+    disable_email_otp: the person is already authenticated with a valid
+    access token."""
+    if not user.sms_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="SMS OTP is not enabled on this account.",
+        )
+    user.sms_otp_enabled = False
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def send_login_sms_otp(user: User) -> None:
+    """Called from the /auth/login route when a user with sms_otp_enabled
+    passes the password check -- sends the code they'll need for
+    /auth/2fa/login. Shares LOGIN_OTP_PREFIX with email OTP (see
+    verify_login_otp) since only one method can be enabled at a time."""
+    code = _generate_otp_code()
+    redis_client.set(f"{LOGIN_OTP_PREFIX}:{user.id}", code, ex=LOGIN_OTP_TTL_SECONDS)
+    send_sms(
+        to=user.phone_number,
+        body=f"Your Reunification Network login code is: {code}. Expires in 5 minutes.",
+    )

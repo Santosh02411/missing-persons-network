@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { createCase } from "../api/cases";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { checkDuplicates, createCase } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import LocationPicker from "../components/LocationPicker";
 import PhotoUpload from "../components/PhotoUpload";
@@ -22,9 +22,32 @@ export default function CaseCreate() {
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [duplicates, setDuplicates] = useState([]);
+  const [duplicatesDismissed, setDuplicatesDismissed] = useState(false);
+
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
+
+  useEffect(() => {
+    if (!form.name.trim() || !location || !form.last_seen_at) {
+      setDuplicates([]);
+      return;
+    }
+    setDuplicatesDismissed(false);
+    const timeout = setTimeout(() => {
+      checkDuplicates({
+        name: form.name,
+        age_at_disappearance: form.age_at_disappearance ? Number(form.age_at_disappearance) : null,
+        last_seen_location: location,
+        last_seen_at: new Date(form.last_seen_at).toISOString(),
+      })
+        .then(({ data }) => setDuplicates(data))
+        .catch(() => setDuplicates([])); // non-critical -- never blocks filing, so a failed check just shows nothing
+    }, 500);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.name, form.age_at_disappearance, form.last_seen_at, location?.lat, location?.lng]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -152,6 +175,41 @@ export default function CaseCreate() {
               station and NGO nationwide.
             </p>
           </div>
+
+          {duplicates.length > 0 && !duplicatesDismissed && (
+            <div className="alert alert-error" style={{ marginBottom: 20 }}>
+              <strong>
+                {duplicates.length} similar case{duplicates.length === 1 ? "" : "s"} already on
+                file
+              </strong>
+              <p style={{ margin: "6px 0" }}>
+                This doesn't stop you from filing — two different people can share a name, and
+                more than one report for the same person is fine too. Just worth a quick check
+                first.
+              </p>
+              <ul style={{ margin: "6px 0 10px", paddingLeft: 18 }}>
+                {duplicates.map((d) => (
+                  <li key={d.case_id}>
+                    <Link to={`/cases/${d.case_id}`} target="_blank" rel="noreferrer">
+                      {d.name}
+                    </Link>{" "}
+                    <span className="field-hint">
+                      ({Math.round(d.similarity * 100)}% name match
+                      {d.distance_km != null ? `, ${d.distance_km}km away` : ""}, {d.status.replace("_", " ")})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: "4px 10px", fontSize: "0.8rem" }}
+                onClick={() => setDuplicatesDismissed(true)}
+              >
+                Not the same — continue filing
+              </button>
+            </div>
+          )}
 
           <button className="btn btn-primary btn-block" type="submit" disabled={isSubmitting}>
             {isSubmitting ? "Filing case…" : "File case"}

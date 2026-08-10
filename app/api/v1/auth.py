@@ -19,6 +19,7 @@ from app.schemas.token import (
     RefreshRequest,
     ResetPasswordRequest,
     SessionRead,
+    SmsOtpSetupRequest,
     Token,
     TwoFactorCodeRequest,
     TwoFactorLoginRequest,
@@ -28,9 +29,11 @@ from app.schemas.user import JurisdictionUpdate, UserCreate, UserLogin, UserRead
 from app.services.auth_service import (
     authenticate_user,
     confirm_email_otp_setup,
+    confirm_sms_otp_setup,
     confirm_totp_setup,
     create_session_id,
     disable_email_otp,
+    disable_sms_otp,
     disable_totp,
     is_refresh_jti_valid,
     list_sessions,
@@ -40,8 +43,10 @@ from app.services.auth_service import (
     revoke_all_sessions,
     revoke_session,
     send_login_otp,
+    send_login_sms_otp,
     send_verification_email,
     start_email_otp_setup,
+    start_sms_otp_setup,
     start_totp_setup,
     store_refresh_jti,
     update_jurisdiction,
@@ -84,12 +89,14 @@ def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)) -
     """Locked out for LOGIN_LOCKOUT_SECONDS after LOGIN_FAILURE_THRESHOLD
     consecutive failures for this email (429 + Retry-After).
 
-    If the account has two-factor auth enabled (either method), this does
-    NOT issue tokens directly -- it returns {mfa_required: true, mfa_token,
-    mfa_method}. For mfa_method="totp" the caller enters a code from their
-    authenticator app; for "email_otp" a fresh code has already been emailed
-    by this call, and the caller enters that. Either way, completing login
-    happens at POST /auth/2fa/login with that mfa_token plus the code."""
+    If the account has two-factor auth enabled (any of the three methods),
+    this does NOT issue tokens directly -- it returns {mfa_required: true,
+    mfa_token, mfa_method}. For mfa_method="totp" the caller enters a code
+    from their authenticator app; for "email_otp"/"sms_otp" a fresh code has
+    already been sent (by email or SMS respectively) by the time this
+    response comes back, and the caller enters that. Either way, completing
+    login happens at POST /auth/2fa/login with that mfa_token plus the
+    code."""
     user = authenticate_user(db, payload.email, payload.password)
 
     if user.totp_enabled:
@@ -100,6 +107,11 @@ def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)) -
         send_login_otp(user)
         return LoginResult(
             mfa_required=True, mfa_token=create_mfa_token(user.id), mfa_method="email_otp"
+        )
+    if user.sms_otp_enabled:
+        send_login_sms_otp(user)
+        return LoginResult(
+            mfa_required=True, mfa_token=create_mfa_token(user.id), mfa_method="sms_otp"
         )
 
     user_agent = request.headers.get("user-agent")
@@ -134,6 +146,9 @@ def login_with_2fa(
         if not user.totp_secret or not verify_totp_code(user.totp_secret, payload.code):
             raise invalid
     elif user.email_otp_enabled:
+        if not verify_login_otp(user.id, payload.code):
+            raise invalid
+    elif user.sms_otp_enabled:
         if not verify_login_otp(user.id, payload.code):
             raise invalid
     else:
@@ -325,3 +340,38 @@ def disable_email_otp_route(
     """No code challenge here (unlike TOTP disable) -- there's no standing
     secret proving anything, so being authenticated is sufficient."""
     return disable_email_otp(db, current_user)
+
+
+@router.post("/2fa/sms-otp/setup", status_code=status.HTTP_202_ACCEPTED)
+def setup_sms_otp(
+    payload: SmsOtpSetupRequest,
+    current_user: User = Depends(require_role(UserRole.AUTHORITY, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Second alternative to the authenticator-app method: sends a
+    confirmation code by SMS to the given phone number instead of a QR code
+    or an email. Restricted to authority/admin the same way TOTP and email
+    OTP setup are. The number isn't saved until /2fa/sms-otp/verify
+    succeeds."""
+    start_sms_otp_setup(db, current_user, payload.phone_number)
+    return {"detail": "A confirmation code has been sent by SMS."}
+
+
+@router.post("/2fa/sms-otp/verify", response_model=UserRead)
+def verify_sms_otp_setup(
+    payload: TwoFactorCodeRequest,
+    current_user: User = Depends(require_role(UserRole.AUTHORITY, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+) -> User:
+    """Confirms the texted code, saving the phone number and enabling
+    sms_otp_enabled."""
+    return confirm_sms_otp_setup(db, current_user, payload.code)
+
+
+@router.post("/2fa/sms-otp/disable", response_model=UserRead)
+def disable_sms_otp_route(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    """No code challenge here either, same reasoning as email OTP disable."""
+    return disable_sms_otp(db, current_user)

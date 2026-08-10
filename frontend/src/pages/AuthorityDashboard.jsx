@@ -127,6 +127,26 @@ export default function AuthorityDashboard() {
                   </span>
                 </div>
                 <div className="field-hint" style={{ marginBottom: 8 }}>{c.last_seen_address}</div>
+                {c.possible_duplicates && c.possible_duplicates.length > 0 && (
+                  <div className="alert alert-error" style={{ padding: "8px 10px", fontSize: "0.82rem", marginBottom: 8 }}>
+                    <strong>
+                      Possible duplicate — {c.possible_duplicates.length} similar case
+                      {c.possible_duplicates.length === 1 ? "" : "s"} already on file:
+                    </strong>
+                    <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                      {c.possible_duplicates.map((d) => (
+                        <li key={d.case_id}>
+                          <Link to={`/cases/${d.case_id}`} target="_blank" rel="noreferrer">
+                            {d.name}
+                          </Link>{" "}
+                          <span className="field-hint">
+                            ({Math.round(d.similarity * 100)}% match{d.distance_km != null ? `, ${d.distance_km}km away` : ""})
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     className="btn btn-primary"

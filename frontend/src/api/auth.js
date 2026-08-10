@@ -71,6 +71,18 @@ export function disableEmailOtp() {
   return apiClient.post("/auth/2fa/email-otp/disable");
 }
 
+export function setupSmsOtp(phone_number) {
+  return apiClient.post("/auth/2fa/sms-otp/setup", { phone_number });
+}
+
+export function verifySmsOtpSetup(code) {
+  return apiClient.post("/auth/2fa/sms-otp/verify", { code });
+}
+
+export function disableSmsOtp() {
+  return apiClient.post("/auth/2fa/sms-otp/disable");
+}
+
 export function listSessions() {
   return apiClient.get("/auth/sessions");
 }

@@ -17,6 +17,7 @@ from app.schemas.case import CaseCreate, CaseShareRequest, CaseUpdate
 from app.services.geo_service import nearest_authority, to_geography
 from app.services.upload_service import read_upload_bytes
 from app.services import watch_service
+from app.services import duplicate_detection_service
 
 # How far case_service will look for a station to auto-route a case to when
 # the reporter didn't pick one explicitly. Beyond this, or if no authority
@@ -54,6 +55,13 @@ def create_case(db: Session, payload: CaseCreate, reporter: User) -> Case:
     is left unrouted and falls back to being visible to any verified
     authority, so it's never stuck unreviewable."""
     target_authority_id = _resolve_target_authority(db, payload)
+    possible_duplicates = duplicate_detection_service.find_possible_duplicates(
+        db,
+        name=payload.name,
+        last_seen_location=payload.last_seen_location,
+        last_seen_at=payload.last_seen_at,
+        age_at_disappearance=payload.age_at_disappearance,
+    )
 
     case = Case(
         created_by=reporter.id,
@@ -67,6 +75,7 @@ def create_case(db: Session, payload: CaseCreate, reporter: User) -> Case:
         last_seen_at=payload.last_seen_at,
         status=CaseStatus.PENDING_REVIEW,
         target_authority_id=target_authority_id,
+        possible_duplicates=possible_duplicates,
     )
     db.add(case)
     db.commit()

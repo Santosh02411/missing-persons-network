@@ -61,6 +61,8 @@ export default function Login() {
           <p className="field-hint" style={{ marginTop: -8, marginBottom: 20 }}>
             {mfaMethod === "email_otp"
               ? "We just emailed a 6-digit code to your registered address. Enter it below."
+              : mfaMethod === "sms_otp"
+              ? "We just texted a 6-digit code to your registered phone number. Enter it below."
               : "Enter the 6-digit code from your authenticator app."}
           </p>
           {error && <div className="alert alert-error">{error}</div>}

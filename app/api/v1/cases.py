@@ -12,14 +12,45 @@ from app.db.session import get_db
 from app.models.case import CaseStatus
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportResult
-from app.schemas.case import CaseCreate, CaseListItem, CaseRead, CaseShareRequest, CaseStatusUpdate, CaseUpdate
+from app.schemas.case import (
+    CaseCreate,
+    CaseListItem,
+    CaseRead,
+    CaseShareRequest,
+    CaseStatusUpdate,
+    CaseUpdate,
+    DuplicateCheckRequest,
+    DuplicateMatch,
+)
 from app.schemas.collaboration import CaseNoteCreate, CaseNoteRead, CollaboratorAdd, CollaboratorRead
 from app.schemas.geo import GeoPoint
 from app.schemas.watch import WatchStatus
-from app.services import bulk_import_service, case_service, collaboration_service, flyer_service, watch_service
+from app.services import bulk_import_service, case_service, collaboration_service, duplicate_detection_service, flyer_service, watch_service
 from app.services.geo_service import nearby_cases
 
 router = APIRouter()
+
+
+@router.post("/check-duplicates", response_model=list[DuplicateMatch])
+def check_duplicates_route(
+    payload: DuplicateCheckRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[DuplicateMatch]:
+    """Lets the case-filing form check for possible duplicates live, as the
+    reporter fills it in -- before they've actually submitted anything. Pure
+    read, creates nothing; the same check runs again server-side at actual
+    creation time (case_service.create_case) regardless of whether this was
+    called, so skipping it doesn't skip the safety net, it just means the
+    reporter won't see the warning before submitting."""
+    matches = duplicate_detection_service.find_possible_duplicates(
+        db,
+        name=payload.name,
+        last_seen_location=payload.last_seen_location,
+        last_seen_at=payload.last_seen_at,
+        age_at_disappearance=payload.age_at_disappearance,
+    )
+    return [DuplicateMatch.model_validate(m) for m in matches]
 
 
 @router.post("", response_model=CaseRead, status_code=201)

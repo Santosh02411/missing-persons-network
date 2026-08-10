@@ -58,6 +58,7 @@ class CaseRead(BaseModel):
     status: CaseStatus
     assigned_authority_id: uuid.UUID | None
     target_authority_id: uuid.UUID | None
+    possible_duplicates: list[dict] = []
     created_at: datetime
     updated_at: datetime
 
@@ -97,6 +98,21 @@ class CaseShareRequest(BaseModel):
         if "@" not in value or "." not in value.split("@")[-1]:
             raise ValueError("Enter a valid email address")
         return value
+
+
+class DuplicateCheckRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    age_at_disappearance: int | None = Field(default=None, ge=0, le=130)
+    last_seen_location: GeoPoint
+    last_seen_at: datetime
+
+
+class DuplicateMatch(BaseModel):
+    case_id: uuid.UUID
+    name: str
+    status: CaseStatus
+    similarity: float
+    distance_km: float | None
 
 
 class CaseListItem(BaseModel):
