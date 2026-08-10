@@ -14,6 +14,7 @@ import {
 import { extractErrorMessage } from "../api/client";
 import { listSightingsForCase } from "../api/sightings";
 import MatchScoreBadge from "../components/MatchScoreBadge";
+import CaseInvestigationPanel from "../components/CaseInvestigationPanel";
 import ShareCaseForm from "../components/ShareCaseForm";
 import SightingForm from "../components/SightingForm";
 import StatusBadge from "../components/StatusBadge";
@@ -279,6 +280,14 @@ export default function CaseDetail() {
           {isSharing && <ShareCaseForm caseId={caseItem.id} onClose={() => setIsSharing(false)} />}
         </div>
       </div>
+
+      {isAuthenticated && (user.role === "authority" || user.role === "admin") && (
+        <CaseInvestigationPanel
+          caseId={caseItem.id}
+          currentUserId={user.id}
+          canManageCollaborators={isAssignedAuthority || isAdmin}
+        />
+      )}
 
       <section style={{ marginBottom: 40 }}>
         <div className="section-heading">

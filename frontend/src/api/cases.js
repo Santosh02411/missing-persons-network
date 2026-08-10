@@ -83,3 +83,23 @@ export function unwatchCase(caseId) {
 export function watchedCases() {
   return apiClient.get("/cases/watched");
 }
+
+export function getCaseNotes(caseId) {
+  return apiClient.get(`/cases/${caseId}/notes`);
+}
+
+export function addCaseNote(caseId, body) {
+  return apiClient.post(`/cases/${caseId}/notes`, { body });
+}
+
+export function getCaseCollaborators(caseId) {
+  return apiClient.get(`/cases/${caseId}/collaborators`);
+}
+
+export function addCaseCollaborator(caseId, authorityId) {
+  return apiClient.post(`/cases/${caseId}/collaborators`, { authority_id: authorityId });
+}
+
+export function removeCaseCollaborator(caseId, userId) {
+  return apiClient.delete(`/cases/${caseId}/collaborators/${userId}`);
+}
