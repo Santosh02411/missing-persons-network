@@ -10,6 +10,40 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # Emergency contacts shown prominently on a case page ("call police
+    # now") -- deliberately NOT gated behind login (see api/v1/emergency.py),
+    # since emergency information should never require an account to see.
+    # Defaults to India-wide numbers (this project's original deployment
+    # context); override via the EMERGENCY_CONTACTS env var (a JSON array)
+    # for a different country/region.
+    EMERGENCY_CONTACTS: list[dict] = [
+        {
+            "label": "Emergency (Police / Fire / Medical)",
+            "number": "112",
+            "description": "India's unified emergency helpline -- available nationwide, 24/7.",
+        },
+        {
+            "label": "Police",
+            "number": "100",
+            "description": "Report a crime or a missing person directly to police.",
+        },
+        {
+            "label": "Child Helpline",
+            "number": "1098",
+            "description": "For missing, abandoned, or endangered children.",
+        },
+        {
+            "label": "Women's Helpline",
+            "number": "1091",
+            "description": "For women in distress or danger.",
+        },
+        {
+            "label": "Senior Citizen Helpline",
+            "number": "14567",
+            "description": "For missing or at-risk elderly persons.",
+        },
+    ]
+
     # Database
     DATABASE_URL: str
     TEST_DATABASE_URL: str | None = None

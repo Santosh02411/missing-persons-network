@@ -29,9 +29,10 @@ def cases_list_cache_key(
     last_seen_before: str | None = None,
     region: str | None = None,
     q: str | None = None,
+    blood_type: str | None = None,
 ) -> str:
     version = get_cases_list_version()
     return (
         f"cache:cases:list:v{version}:{status_filter}:{limit}:{offset}:"
-        f"{gender}:{age_min}:{age_max}:{last_seen_after}:{last_seen_before}:{region}:{q}"
+        f"{gender}:{age_min}:{age_max}:{last_seen_after}:{last_seen_before}:{region}:{q}:{blood_type}"
     )
