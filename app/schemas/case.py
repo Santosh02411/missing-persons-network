@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.case import CaseStatus
+from app.models.case import BLOOD_TYPES, CaseStatus
 from app.schemas.geo import GeoPoint
 
 
@@ -17,6 +17,25 @@ class CaseCreate(BaseModel):
     last_seen_address: str = Field(min_length=1, max_length=500)
     last_seen_at: datetime
 
+    # Structured physical identifiers -- all optional at filing time, since
+    # most reporters won't know or think to include all of these under
+    # pressure, and none of them should block filing a case.
+    height_cm: int | None = Field(default=None, ge=0, le=300)
+    eye_color: str | None = Field(default=None, max_length=30)
+    hair_color: str | None = Field(default=None, max_length=30)
+    blood_type: str | None = Field(default=None, max_length=10)
+    distinguishing_marks: str | None = Field(default=None, max_length=2000)
+    medical_conditions: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("blood_type")
+    @classmethod
+    def _validate_blood_type(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if value not in BLOOD_TYPES:
+            raise ValueError(f"blood_type must be one of {', '.join(BLOOD_TYPES)}")
+        return value
+
     # Optional: the reporter can pick a specific police station / NGO to
     # file this case with (from the nearby-authorities picker). If omitted,
     # case_service.create_case auto-routes to the nearest verified station
@@ -27,7 +46,11 @@ class CaseCreate(BaseModel):
 class CaseUpdate(BaseModel):
     """Partial update — all fields optional. Status is intentionally excluded;
     that goes through the dedicated status-change endpoint so it can carry its
-    own audit-log write and (Phase 3) role gate."""
+    own audit-log write and (Phase 3) role gate. Age-progression fields are
+    also excluded here -- they go through the dedicated
+    PATCH /{case_id}/age-progression endpoint instead, which is restricted
+    to whoever has case access rather than following this endpoint's
+    owner-or-authority rule (see case_service.update_case)."""
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     age_at_disappearance: int | None = Field(default=None, ge=0, le=130)
@@ -36,6 +59,26 @@ class CaseUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=1)
     last_seen_location: GeoPoint | None = None
     last_seen_address: str | None = Field(default=None, min_length=1, max_length=500)
+    height_cm: int | None = Field(default=None, ge=0, le=300)
+    eye_color: str | None = Field(default=None, max_length=30)
+    hair_color: str | None = Field(default=None, max_length=30)
+    blood_type: str | None = Field(default=None, max_length=10)
+    distinguishing_marks: str | None = Field(default=None, max_length=2000)
+    medical_conditions: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("blood_type")
+    @classmethod
+    def _validate_blood_type_update(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if value not in BLOOD_TYPES:
+            raise ValueError(f"blood_type must be one of {', '.join(BLOOD_TYPES)}")
+        return value
+
+
+class AgeProgressionUpdate(BaseModel):
+    age_progressed_photo_url: str = Field(min_length=1, max_length=500)
+    age_progression_note: str | None = Field(default=None, max_length=2000)
 
 
 class CaseStatusUpdate(BaseModel):
@@ -59,6 +102,14 @@ class CaseRead(BaseModel):
     assigned_authority_id: uuid.UUID | None
     target_authority_id: uuid.UUID | None
     possible_duplicates: list[dict] = []
+    age_progressed_photo_url: str | None = None
+    age_progression_note: str | None = None
+    height_cm: int | None = None
+    eye_color: str | None = None
+    hair_color: str | None = None
+    blood_type: str | None = None
+    distinguishing_marks: str | None = None
+    medical_conditions: str | None = None
     created_at: datetime
     updated_at: datetime
 
