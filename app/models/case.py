@@ -19,13 +19,16 @@ class CaseStatus(str, enum.Enum):
 
 # Shared between the model (below, so Base.metadata.create_all() -- what the
 # test suite uses -- creates a real generated column, not a plain nullable
-# one) and migration 0015 (what a real deployment applies via `alembic
+# one) and migration 0015/0016 (what a real deployment applies via `alembic
 # upgrade head`) -- both need the identical expression, or the two schemas
 # drift and only one of them actually works.
 SEARCH_VECTOR_EXPRESSION = (
     "to_tsvector('english', "
-    "coalesce(name, '') || ' ' || coalesce(description, '') || ' ' || coalesce(last_seen_address, ''))"
+    "coalesce(name, '') || ' ' || coalesce(description, '') || ' ' || coalesce(last_seen_address, '') "
+    "|| ' ' || coalesce(distinguishing_marks, ''))"
 )
+
+BLOOD_TYPES = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "unknown")
 
 
 class Case(Base):
@@ -39,6 +42,42 @@ class Case(Base):
     age_at_disappearance: Mapped[int | None] = mapped_column(Integer, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # An additional photo showing an age-progressed likeness (from a forensic
+    # artist or an age-progression tool), for cases open long enough that
+    # appearance has likely changed -- especially children. Shown alongside
+    # the original photo, never in place of it. Set via a dedicated
+    # endpoint (PATCH /{case_id}/age-progression) restricted to whoever has
+    # case access, not at filing time -- a reporter filing a case doesn't
+    # have one yet; it's added later as part of an active investigation.
+    age_progressed_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Free-text context for the age-progressed image -- e.g. "Progressed to
+    # an estimated age 15 based on family features, produced by [agency]" --
+    # so it's clear it's an estimate, not a confirmed current photo.
+    age_progression_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Structured physical identifiers -- how many real forensic matches
+    # actually happen (a scar, a blood type, a medical device) rather than
+    # facial recognition alone, especially for a photo that's now years out
+    # of date. All optional and free-text/short-code, not required at
+    # filing -- most reports won't have all of these, and reporters
+    # shouldn't be blocked from filing over missing detail.
+    height_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    eye_color: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    hair_color: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    blood_type: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Scars, tattoos, birthmarks -- combined into one free-text field rather
+    # than three, since real descriptions of these rarely separate cleanly
+    # ("2-inch scar on left forearm, small star tattoo on right ankle").
+    # Included in full-text search (see SEARCH_VECTOR_EXPRESSION) since this
+    # is exactly the kind of detail someone recalling a sighting searches by.
+    distinguishing_marks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Conditions relevant to identification or the person's safety while
+    # missing (e.g. "Type 1 diabetic, needs insulin", "non-verbal, autistic")
+    # -- entered by the family/reporter about the missing person, not the
+    # account holder; distinct from (and not subject to) this app's own
+    # user-privacy rules around the logged-in person's own health data.
+    medical_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Free-text, not a DB enum -- deliberately open-ended (not limited to a
     # fixed set) since a missing-persons registry shouldn't force reporters
