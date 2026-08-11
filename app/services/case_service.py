@@ -76,6 +76,12 @@ def create_case(db: Session, payload: CaseCreate, reporter: User) -> Case:
         status=CaseStatus.PENDING_REVIEW,
         target_authority_id=target_authority_id,
         possible_duplicates=possible_duplicates,
+        height_cm=payload.height_cm,
+        eye_color=payload.eye_color,
+        hair_color=payload.hair_color,
+        blood_type=payload.blood_type,
+        distinguishing_marks=payload.distinguishing_marks,
+        medical_conditions=payload.medical_conditions,
     )
     db.add(case)
     db.commit()
@@ -151,6 +157,7 @@ def list_cases(
     last_seen_before: datetime | None = None,
     region: str | None = None,
     q: str | None = None,
+    blood_type: str | None = None,
 ) -> list[Case]:
     # Never publicly listed, even if someone explicitly asks for
     # ?status=pending_review -- unapproved cases aren't public. Use
@@ -194,6 +201,8 @@ def list_cases(
         # means "this text appears somewhere in the address" (e.g.
         # "Belagavi" or "Karnataka"), not a strict administrative boundary.
         stmt = stmt.where(Case.last_seen_address.ilike(f"%{region}%"))
+    if blood_type:
+        stmt = stmt.where(Case.blood_type == blood_type)
     return list(db.scalars(stmt))
 
 
@@ -290,6 +299,26 @@ def has_case_access(db: Session, case: Case, user: User) -> bool:
     if case.assigned_authority_id == user.id:
         return True
     return is_case_collaborator(db, case.id, user.id)
+
+
+def update_age_progression(db: Session, case: Case, payload, actor: User) -> Case:
+    """Sets/updates the case's age-progressed photo -- restricted to
+    whoever has case access (assigned authority, a collaborator, or an
+    admin), not the reporter or a general authority browsing an open case.
+    This is normally added well after filing, once an investigation
+    warrants it (a forensic artist or an age-progression tool produces the
+    image externally; this just records where to find it)."""
+    if not has_case_access(db, case, actor):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned authority, a collaborator on this case, or an admin can set this",
+        )
+    case.age_progressed_photo_url = payload.age_progressed_photo_url
+    case.age_progression_note = payload.age_progression_note
+    db.commit()
+    db.refresh(case)
+    bump_cases_list_version()
+    return case
 
 
 def approve_case(db: Session, case: Case, actor: User) -> Case:
