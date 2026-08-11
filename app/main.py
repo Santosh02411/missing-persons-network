@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-from app.api.v1 import admin, authorities, auth, cases, sightings, uploads
+from app.api.v1 import admin, authorities, auth, cases, emergency, sightings, uploads
 from app.core.config import settings
 from app.db.session import engine
 
@@ -97,3 +97,4 @@ app.include_router(sightings.router, prefix="/api/v1/sightings", tags=["sighting
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(uploads.router, prefix="/api/v1/uploads", tags=["uploads"])
 app.include_router(authorities.router, prefix="/api/v1/authorities", tags=["authorities"])
+app.include_router(emergency.router, prefix="/api/v1/emergency-contacts", tags=["emergency"])
