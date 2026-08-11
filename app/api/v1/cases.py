@@ -13,6 +13,7 @@ from app.models.case import CaseStatus
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportResult
 from app.schemas.case import (
+    AgeProgressionUpdate,
     CaseCreate,
     CaseListItem,
     CaseRead,
@@ -87,6 +88,7 @@ def list_cases(
     last_seen_before: datetime | None = Query(default=None),
     region: str | None = Query(default=None, max_length=255),
     q: str | None = Query(default=None, max_length=255),
+    blood_type: str | None = Query(default=None, max_length=10),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -125,6 +127,7 @@ def list_cases(
         last_seen_before.isoformat() if last_seen_before else None,
         region,
         q,
+        blood_type,
     )
     cached = redis_client.get(cache_key)
     if cached is not None:
@@ -134,7 +137,7 @@ def list_cases(
         db, status_filter, limit, offset,
         gender=gender, age_min=age_min, age_max=age_max,
         last_seen_after=last_seen_after, last_seen_before=last_seen_before,
-        region=region, q=q,
+        region=region, q=q, blood_type=blood_type,
     )
     result = [CaseListItem.model_validate(c).model_dump(mode="json") for c in cases]
     redis_client.set(cache_key, json.dumps(result), ex=CASES_LIST_TTL_SECONDS)
@@ -513,3 +516,19 @@ def sync_case_to_registry_stub(
         )
     receipt = registry_export_service.record_registry_sync_stub(db, case, current_user)
     return RegistrySyncReceipt.model_validate(receipt)
+
+
+@router.patch("/{case_id}/age-progression", response_model=CaseRead)
+def update_case_age_progression(
+    case_id: uuid.UUID,
+    payload: AgeProgressionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> CaseRead:
+    """Sets or updates the case's age-progressed photo -- shown alongside
+    the original photo (never replacing it) once a case has been open long
+    enough that appearance has likely changed. Restricted to whoever has
+    case access, not the reporter or any authority browsing the case."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    updated = case_service.update_age_progression(db, case, payload, current_user)
+    return CaseRead.model_validate(updated)
