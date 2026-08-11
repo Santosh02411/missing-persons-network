@@ -6,8 +6,10 @@ import {
   getCaseCollaborators,
   getCaseNotes,
   removeCaseCollaborator,
+  updateAgeProgression,
 } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
+import PhotoUpload from "./PhotoUpload";
 
 /**
  * canManageCollaborators: whether the current user is the case's assigned
@@ -15,7 +17,14 @@ import { extractErrorMessage } from "../api/client";
  * is shown. Everyone with case access can view the list, add notes, and
  * remove themselves as a collaborator.
  */
-export default function CaseInvestigationPanel({ caseId, currentUserId, canManageCollaborators }) {
+export default function CaseInvestigationPanel({
+  caseId,
+  currentUserId,
+  canManageCollaborators,
+  ageProgressedPhotoUrl,
+  ageProgressionNote,
+  onAgeProgressionUpdated,
+}) {
   const [notes, setNotes] = useState([]);
   const [collaborators, setCollaborators] = useState([]);
   const [noteBody, setNoteBody] = useState("");
@@ -27,6 +36,10 @@ export default function CaseInvestigationPanel({ caseId, currentUserId, canManag
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAddingCollaborator, setIsAddingCollaborator] = useState(false);
+
+  const [ageProgressedUrl, setAgeProgressedUrl] = useState(ageProgressedPhotoUrl || "");
+  const [ageProgressionNoteInput, setAgeProgressionNoteInput] = useState(ageProgressionNote || "");
+  const [isSavingAgeProgression, setIsSavingAgeProgression] = useState(false);
 
   function reload() {
     Promise.all([getCaseNotes(caseId), getCaseCollaborators(caseId)])
@@ -101,6 +114,24 @@ export default function CaseInvestigationPanel({ caseId, currentUserId, canManag
   }
 
   if (!hasAccess) return null;
+
+  async function handleSaveAgeProgression(e) {
+    e.preventDefault();
+    if (!ageProgressedUrl) return;
+    setError(null);
+    setIsSavingAgeProgression(true);
+    try {
+      const { data } = await updateAgeProgression(caseId, {
+        age_progressed_photo_url: ageProgressedUrl,
+        age_progression_note: ageProgressionNoteInput || null,
+      });
+      if (onAgeProgressionUpdated) onAgeProgressionUpdated(data);
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't save the age-progressed photo."));
+    } finally {
+      setIsSavingAgeProgression(false);
+    }
+  }
 
   return (
     <div className="dashboard-card" style={{ marginTop: 24 }}>
@@ -227,6 +258,34 @@ export default function CaseInvestigationPanel({ caseId, currentUserId, canManag
             ))}
           </div>
         )}
+      </div>
+
+      <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--color-mist)" }}>
+        <strong style={{ fontSize: "0.9rem" }}>Age-progressed photo</strong>
+        <p className="field-hint" style={{ marginTop: 4, marginBottom: 10 }}>
+          For cases open long enough that appearance has likely changed. Shown alongside the
+          original photo on the case page, never replacing it.
+        </p>
+        <form onSubmit={handleSaveAgeProgression}>
+          <PhotoUpload value={ageProgressedUrl} onChange={setAgeProgressedUrl} />
+          <div className="field" style={{ marginTop: 10, marginBottom: 10 }}>
+            <label htmlFor="age-progression-note">Note (optional)</label>
+            <input
+              id="age-progression-note"
+              placeholder="e.g. Progressed to an estimated age 15, produced by..."
+              value={ageProgressionNoteInput}
+              onChange={(e) => setAgeProgressionNoteInput(e.target.value)}
+            />
+          </div>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+            disabled={isSavingAgeProgression || !ageProgressedUrl}
+          >
+            {isSavingAgeProgression ? "Saving…" : "Save age-progressed photo"}
+          </button>
+        </form>
       </div>
     </div>
   );

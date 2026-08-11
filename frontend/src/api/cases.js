@@ -115,3 +115,7 @@ export function bulkImportCases(file) {
     headers: { "Content-Type": "multipart/form-data" },
   });
 }
+
+export function updateAgeProgression(caseId, payload) {
+  return apiClient.patch(`/cases/${caseId}/age-progression`, payload);
+}

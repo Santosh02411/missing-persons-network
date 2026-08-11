@@ -16,6 +16,12 @@ export default function CaseCreate() {
     description: "",
     last_seen_address: "",
     last_seen_at: "",
+    height_cm: "",
+    eye_color: "",
+    hair_color: "",
+    blood_type: "",
+    distinguishing_marks: "",
+    medical_conditions: "",
   });
   const [location, setLocation] = useState(null);
   const [targetAuthorityId, setTargetAuthorityId] = useState(null);
@@ -72,6 +78,12 @@ export default function CaseCreate() {
         last_seen_address: form.last_seen_address,
         last_seen_at: new Date(form.last_seen_at).toISOString(),
         target_authority_id: targetAuthorityId,
+        height_cm: form.height_cm ? Number(form.height_cm) : null,
+        eye_color: form.eye_color || null,
+        hair_color: form.hair_color || null,
+        blood_type: form.blood_type || null,
+        distinguishing_marks: form.distinguishing_marks || null,
+        medical_conditions: form.medical_conditions || null,
       });
       navigate(`/cases/${data.id}`);
     } catch (err) {
@@ -148,6 +160,83 @@ export default function CaseCreate() {
               value={form.description}
               onChange={(e) => updateField("description", e.target.value)}
             />
+          </div>
+
+          <div className="dashboard-card" style={{ marginBottom: 20 }}>
+            <div className="section-heading" style={{ marginTop: 0, borderBottom: "none", marginBottom: 8 }}>
+              <h3 style={{ margin: 0, fontSize: "0.95rem" }}>Physical identifiers (optional)</h3>
+            </div>
+            <p className="field-hint" style={{ marginTop: 0, marginBottom: 12 }}>
+              These often matter more than a photo for identification, especially if the photo
+              is old — a scar, blood type, or medical condition can confirm a match that a face
+              alone can't. Fill in whatever you know; none of this is required.
+            </p>
+            <div className="field-row">
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label htmlFor="height_cm">Height (cm)</label>
+                <input
+                  id="height_cm"
+                  type="number"
+                  min="0"
+                  max="300"
+                  value={form.height_cm}
+                  onChange={(e) => updateField("height_cm", e.target.value)}
+                />
+              </div>
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label htmlFor="blood_type">Blood type</label>
+                <select
+                  id="blood_type"
+                  value={form.blood_type}
+                  onChange={(e) => updateField("blood_type", e.target.value)}
+                >
+                  <option value="">Unknown</option>
+                  {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map((bt) => (
+                    <option key={bt} value={bt}>{bt}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="field-row">
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label htmlFor="eye_color">Eye color</label>
+                <input
+                  id="eye_color"
+                  placeholder="e.g. brown"
+                  value={form.eye_color}
+                  onChange={(e) => updateField("eye_color", e.target.value)}
+                />
+              </div>
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label htmlFor="hair_color">Hair color</label>
+                <input
+                  id="hair_color"
+                  placeholder="e.g. black"
+                  value={form.hair_color}
+                  onChange={(e) => updateField("hair_color", e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label htmlFor="distinguishing_marks">Scars, tattoos, birthmarks</label>
+              <textarea
+                id="distinguishing_marks"
+                rows={2}
+                placeholder="e.g. small star tattoo on right ankle, scar above left eyebrow"
+                value={form.distinguishing_marks}
+                onChange={(e) => updateField("distinguishing_marks", e.target.value)}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="medical_conditions">Medical conditions</label>
+              <textarea
+                id="medical_conditions"
+                rows={2}
+                placeholder="e.g. Type 1 diabetic, needs insulin; non-verbal, autistic"
+                value={form.medical_conditions}
+                onChange={(e) => updateField("medical_conditions", e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="field">

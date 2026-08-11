@@ -865,3 +865,85 @@ main {
   font-size: 0.78rem;
   color: var(--color-graytext);
 }
+
+/* ---------- Emergency contacts banner ----------
+   Deliberately its own visual register -- urgent rust/red, not the site's
+   navy/beacon identity -- since this needs to read as "different from
+   everything else on the page" at a glance, the way a real emergency
+   notice does. */
+.emergency-banner {
+  background: linear-gradient(155deg, #7a2e24 0%, #a44a3f 100%);
+  color: #fff;
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-6);
+}
+.emergency-banner-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.emergency-banner-label {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #fff;
+}
+.emergency-call-btn {
+  background: #fff;
+  color: #7a2e24;
+  font-weight: 700;
+  padding: 10px 20px;
+  white-space: nowrap;
+}
+.emergency-call-btn:hover {
+  background: #f3d9b1;
+  color: #7a2e24;
+  text-decoration: none;
+}
+.emergency-banner-toggle {
+  background: none;
+  border: none;
+  color: #f3d9b1;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: var(--space-3);
+}
+.emergency-banner-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.emergency-banner-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+.emergency-banner-item:hover {
+  background: rgba(255, 255, 255, 0.18);
+  text-decoration: none;
+}
+.emergency-banner-item-label {
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.emergency-banner-item-number {
+  font-family: var(--font-mono);
+  color: #f3d9b1;
+  font-size: 0.9rem;
+}
+.emergency-banner-item-desc {
+  color: #e8c9ad;
+  font-size: 0.72rem;
+}

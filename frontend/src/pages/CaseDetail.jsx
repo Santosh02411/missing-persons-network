@@ -13,8 +13,9 @@ import {
 } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
 import { listSightingsForCase } from "../api/sightings";
-import MatchScoreBadge from "../components/MatchScoreBadge";
 import CaseInvestigationPanel from "../components/CaseInvestigationPanel";
+import EmergencyContactsBanner from "../components/EmergencyContactsBanner";
+import MatchScoreBadge from "../components/MatchScoreBadge";
 import ShareCaseForm from "../components/ShareCaseForm";
 import SightingForm from "../components/SightingForm";
 import StatusBadge from "../components/StatusBadge";
@@ -162,11 +163,27 @@ export default function CaseDetail() {
 
   return (
     <div className="container">
+      {(caseItem.status === "open" || caseItem.status === "lead_found" || caseItem.status === "pending_review") && (
+        <EmergencyContactsBanner />
+      )}
       <div className="case-detail-header">
         {caseItem.photo_url ? (
           <img src={caseItem.photo_url} alt={caseItem.name} className="case-detail-photo" />
         ) : (
           <div className="case-detail-photo-placeholder">No photo provided</div>
+        )}
+        {caseItem.age_progressed_photo_url && (
+          <div>
+            <img
+              src={caseItem.age_progressed_photo_url}
+              alt={`${caseItem.name} (age-progressed)`}
+              className="case-detail-photo"
+            />
+            <div className="field-hint" style={{ marginTop: 4, maxWidth: 220 }}>
+              Age-progressed likeness
+              {caseItem.age_progression_note ? ` — ${caseItem.age_progression_note}` : ""}
+            </div>
+          </div>
         )}
 
         <div className="case-detail-info">
@@ -203,6 +220,36 @@ export default function CaseDetail() {
             <>
               <div className="case-detail-label">Age at disappearance</div>
               <div>{caseItem.age_at_disappearance}</div>
+            </>
+          )}
+
+          {(caseItem.height_cm || caseItem.eye_color || caseItem.hair_color || caseItem.blood_type) && (
+            <>
+              <div className="case-detail-label">Physical identifiers</div>
+              <div>
+                {[
+                  caseItem.height_cm ? `${caseItem.height_cm} cm` : null,
+                  caseItem.eye_color ? `${caseItem.eye_color} eyes` : null,
+                  caseItem.hair_color ? `${caseItem.hair_color} hair` : null,
+                  caseItem.blood_type ? `Blood type ${caseItem.blood_type}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            </>
+          )}
+
+          {caseItem.distinguishing_marks && (
+            <>
+              <div className="case-detail-label">Distinguishing marks</div>
+              <div>{caseItem.distinguishing_marks}</div>
+            </>
+          )}
+
+          {caseItem.medical_conditions && (
+            <>
+              <div className="case-detail-label">Medical conditions</div>
+              <div>{caseItem.medical_conditions}</div>
             </>
           )}
 
@@ -286,6 +333,9 @@ export default function CaseDetail() {
           caseId={caseItem.id}
           currentUserId={user.id}
           canManageCollaborators={isAssignedAuthority || isAdmin}
+          ageProgressedPhotoUrl={caseItem.age_progressed_photo_url}
+          ageProgressionNote={caseItem.age_progression_note}
+          onAgeProgressionUpdated={(updated) => setCaseItem(updated)}
         />
       )}
 
