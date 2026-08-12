@@ -1,7 +1,7 @@
 import enum
 
 from geoalchemy2 import Geography
-from sqlalchemy import Boolean, Enum, String
+from sqlalchemy import Boolean, Enum, Float, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
@@ -82,6 +82,21 @@ class User(Base):
     # since most accounts never use this method.
     phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     sms_otp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Geofenced alerts (opt-in): notify this account by email when an
+    # authority/NGO pushes an alert for a newly-filed case near a location
+    # this person cares about -- their home area, a relative's neighborhood,
+    # wherever they choose. Distinct from jurisdiction_location (an
+    # authority's own station, used for case routing) and from CaseWatch
+    # (subscribing to updates on one specific case they already know about)
+    # -- this is "tell me about *new* cases near a place," opt-in and off
+    # by default. All nullable/false until the person explicitly sets this
+    # up (see auth_service.update_alert_preferences).
+    alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    alert_location: Mapped[str | None] = mapped_column(
+        Geography(geometry_type="POINT", srid=4326), nullable=True
+    )
+    alert_radius_km: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     cases_reported = relationship(
         "Case", back_populates="reporter", foreign_keys="Case.created_by"
