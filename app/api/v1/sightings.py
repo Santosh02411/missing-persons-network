@@ -71,10 +71,13 @@ def get_pending_sightings(
     "my assigned cases" -- matches the existing design that any verified
     authority can review any pending sighting (see docs/SECURITY_AND_ACCESS.md)."""
     sightings = sighting_service.list_pending_sightings(db, limit, offset)
+    reporter_ids = [s.reported_by for s in sightings if s.reported_by is not None]
+    stats_by_reporter = sighting_service.get_reporter_stats_bulk(db, reporter_ids)
     items = []
     for s in sightings:
         data = SightingRead.model_validate(s).model_dump()
         data["case_name"] = s.case.name
+        data["reporter_stats"] = stats_by_reporter.get(s.reported_by) if s.reported_by else None
         items.append(data)
     return items
 

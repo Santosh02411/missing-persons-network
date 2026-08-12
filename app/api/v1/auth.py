@@ -25,7 +25,9 @@ from app.schemas.token import (
     TwoFactorLoginRequest,
     TwoFactorSetupResponse,
 )
+from app.schemas.alert import AlertPreferencesUpdate
 from app.schemas.user import JurisdictionUpdate, UserCreate, UserLogin, UserRead
+from app.services.alert_service import update_alert_preferences
 from app.services.auth_service import (
     authenticate_user,
     confirm_email_otp_setup,
@@ -237,6 +239,22 @@ def update_my_jurisdiction(
     used to auto-route newly-filed cases to the nearest verified station
     (see case_service.create_case)."""
     return update_jurisdiction(db, current_user, payload.jurisdiction_location)
+
+
+@router.patch("/me/alert-preferences", response_model=UserRead)
+def update_my_alert_preferences(
+    payload: AlertPreferencesUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Opt in/out of geofenced alerts -- notifications when an authority
+    pushes an alert for a newly-filed case near a location the person
+    chooses (their home area, a relative's neighborhood, etc). Open to any
+    role, unlike jurisdiction (which is authority-only) -- this is a
+    citizen-facing feature."""
+    return update_alert_preferences(
+        db, current_user, payload.enabled, payload.location, payload.radius_km
+    )
 
 
 @router.post("/verify-email", response_model=UserRead)

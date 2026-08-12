@@ -12,10 +12,12 @@ from app.db.session import get_db
 from app.models.case import CaseStatus
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportResult
+from app.schemas.alert import AlertSendResult
 from app.schemas.case import (
     AgeProgressionUpdate,
     CaseCreate,
     CaseListItem,
+    CaseReopenRequest,
     CaseRead,
     CaseShareRequest,
     CaseStatusUpdate,
@@ -29,6 +31,7 @@ from app.schemas.collaboration import CaseNoteCreate, CaseNoteRead, Collaborator
 from app.schemas.geo import GeoPoint
 from app.schemas.watch import WatchStatus
 from app.services import (
+    alert_service,
     bulk_import_service,
     case_service,
     collaboration_service,
@@ -301,6 +304,22 @@ def update_case_status(
     return CaseRead.model_validate(updated)
 
 
+@router.post("/{case_id}/reopen", response_model=CaseRead)
+def reopen_case_route(
+    case_id: uuid.UUID,
+    payload: CaseReopenRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> CaseRead:
+    """Reopens a resolved case back to Open -- for a "found" person
+    confirmed missing again, or a mistaken resolution. Only from RESOLVED;
+    a reason is required and recorded in the audit trail (see
+    case_service.reopen_case)."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    updated = case_service.reopen_case(db, case, payload.reason, actor=current_user)
+    return CaseRead.model_validate(updated)
+
+
 @router.post("/{case_id}/share", status_code=204)
 def share_case_route(
     case_id: uuid.UUID,
@@ -532,3 +551,18 @@ def update_case_age_progression(
     case = case_service.get_case_or_404(db, case_id, current_user)
     updated = case_service.update_age_progression(db, case, payload, current_user)
     return CaseRead.model_validate(updated)
+
+
+@router.post("/{case_id}/alert", response_model=AlertSendResult)
+def send_case_alert(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_authority_or_admin),
+) -> AlertSendResult:
+    """Pushes a geofenced alert -- an opt-in, community-scale analog of an
+    Amber Alert -- to every subscriber near this case's last-seen location.
+    Restricted to whoever has case access; rate-limited to once per case per
+    RESEND_COOLDOWN_HOURS (see alert_service.send_geofenced_alert)."""
+    case = case_service.get_case_or_404(db, case_id, current_user)
+    result = alert_service.send_geofenced_alert(db, case, current_user)
+    return AlertSendResult.model_validate(result)
