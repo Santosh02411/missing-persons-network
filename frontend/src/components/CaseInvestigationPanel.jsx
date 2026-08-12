@@ -6,6 +6,8 @@ import {
   getCaseCollaborators,
   getCaseNotes,
   removeCaseCollaborator,
+  reopenCase,
+  sendCaseAlert,
   updateAgeProgression,
 } from "../api/cases";
 import { extractErrorMessage } from "../api/client";
@@ -21,9 +23,10 @@ export default function CaseInvestigationPanel({
   caseId,
   currentUserId,
   canManageCollaborators,
+  caseStatus,
   ageProgressedPhotoUrl,
   ageProgressionNote,
-  onAgeProgressionUpdated,
+  onCaseUpdated,
 }) {
   const [notes, setNotes] = useState([]);
   const [collaborators, setCollaborators] = useState([]);
@@ -40,6 +43,13 @@ export default function CaseInvestigationPanel({
   const [ageProgressedUrl, setAgeProgressedUrl] = useState(ageProgressedPhotoUrl || "");
   const [ageProgressionNoteInput, setAgeProgressionNoteInput] = useState(ageProgressionNote || "");
   const [isSavingAgeProgression, setIsSavingAgeProgression] = useState(false);
+
+  const [isReopening, setIsReopening] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [isSubmittingReopen, setIsSubmittingReopen] = useState(false);
+
+  const [isSendingAlert, setIsSendingAlert] = useState(false);
+  const [alertResult, setAlertResult] = useState(null);
 
   function reload() {
     Promise.all([getCaseNotes(caseId), getCaseCollaborators(caseId)])
@@ -125,11 +135,42 @@ export default function CaseInvestigationPanel({
         age_progressed_photo_url: ageProgressedUrl,
         age_progression_note: ageProgressionNoteInput || null,
       });
-      if (onAgeProgressionUpdated) onAgeProgressionUpdated(data);
+      if (onCaseUpdated) onCaseUpdated(data);
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't save the age-progressed photo."));
     } finally {
       setIsSavingAgeProgression(false);
+    }
+  }
+
+  async function handleReopen(e) {
+    e.preventDefault();
+    if (!reopenReason.trim()) return;
+    setError(null);
+    setIsSubmittingReopen(true);
+    try {
+      const { data } = await reopenCase(caseId, reopenReason.trim());
+      if (onCaseUpdated) onCaseUpdated(data);
+      setIsReopening(false);
+      setReopenReason("");
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't reopen this case."));
+    } finally {
+      setIsSubmittingReopen(false);
+    }
+  }
+
+  async function handleSendAlert() {
+    setError(null);
+    setAlertResult(null);
+    setIsSendingAlert(true);
+    try {
+      const { data } = await sendCaseAlert(caseId);
+      setAlertResult(data);
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't send the alert."));
+    } finally {
+      setIsSendingAlert(false);
     }
   }
 
@@ -287,6 +328,83 @@ export default function CaseInvestigationPanel({
           </button>
         </form>
       </div>
+
+      {(caseStatus === "open" || caseStatus === "lead_found") && (
+        <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--color-mist)" }}>
+          <strong style={{ fontSize: "0.9rem" }}>Geofenced alert</strong>
+          <p className="field-hint" style={{ marginTop: 4, marginBottom: 10 }}>
+            Notify everyone who's opted in to alerts near this case's last-seen location — a
+            community-scale, opt-in analog of an Amber Alert. Limited to once per case every 24
+            hours.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+            onClick={handleSendAlert}
+            disabled={isSendingAlert}
+          >
+            {isSendingAlert ? "Sending…" : "Send geofenced alert"}
+          </button>
+          {alertResult && (
+            <p className="field-hint" style={{ marginTop: 8 }}>
+              Sent to {alertResult.notified_count} nearby subscriber
+              {alertResult.notified_count === 1 ? "" : "s"}.
+            </p>
+          )}
+        </div>
+      )}
+
+      {caseStatus === "resolved" && (
+        <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--color-mist)" }}>
+          <strong style={{ fontSize: "0.9rem" }}>Reopen this case</strong>
+          <p className="field-hint" style={{ marginTop: 4, marginBottom: 10 }}>
+            If the person has gone missing again, or this was resolved in error.
+          </p>
+          {!isReopening ? (
+            <button
+              type="button"
+              className="btn btn-danger"
+              style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+              onClick={() => setIsReopening(true)}
+            >
+              Reopen case
+            </button>
+          ) : (
+            <form onSubmit={handleReopen}>
+              <div className="field" style={{ marginBottom: 10 }}>
+                <label htmlFor="reopen-reason">Reason (required)</label>
+                <textarea
+                  id="reopen-reason"
+                  rows={2}
+                  required
+                  placeholder="e.g. Family reports they went missing again on..."
+                  value={reopenReason}
+                  onChange={(e) => setReopenReason(e.target.value)}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="submit"
+                  className="btn btn-danger"
+                  style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+                  disabled={isSubmittingReopen || !reopenReason.trim()}
+                >
+                  {isSubmittingReopen ? "Reopening…" : "Confirm reopen"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+                  onClick={() => setIsReopening(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
     </div>
   );
 }

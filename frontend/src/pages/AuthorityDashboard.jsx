@@ -190,7 +190,15 @@ export default function AuthorityDashboard() {
                   </span>
                 </div>
                 <div>{s.description}</div>
-                <div className="field-hint" style={{ marginBottom: 8 }}>{s.address_text}</div>
+                <div className="field-hint" style={{ marginBottom: 4 }}>{s.address_text}</div>
+                {s.reporter_stats && (
+                  <div className="field-hint" style={{ marginBottom: 8, fontFamily: "var(--font-mono)" }}>
+                    Reporter history: {s.reporter_stats.verified} verified, {s.reporter_stats.dismissed} dismissed
+                    {s.reporter_stats.total > 1
+                      ? ` (${s.reporter_stats.total} sightings total)`
+                      : " (first sighting from this reporter)"}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     className="btn btn-primary"

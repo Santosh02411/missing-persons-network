@@ -119,3 +119,11 @@ export function bulkImportCases(file) {
 export function updateAgeProgression(caseId, payload) {
   return apiClient.patch(`/cases/${caseId}/age-progression`, payload);
 }
+
+export function reopenCase(caseId, reason) {
+  return apiClient.post(`/cases/${caseId}/reopen`, { reason });
+}
+
+export function sendCaseAlert(caseId) {
+  return apiClient.post(`/cases/${caseId}/alert`);
+}

@@ -333,9 +333,10 @@ export default function CaseDetail() {
           caseId={caseItem.id}
           currentUserId={user.id}
           canManageCollaborators={isAssignedAuthority || isAdmin}
+          caseStatus={caseItem.status}
           ageProgressedPhotoUrl={caseItem.age_progressed_photo_url}
           ageProgressionNote={caseItem.age_progression_note}
-          onAgeProgressionUpdated={(updated) => setCaseItem(updated)}
+          onCaseUpdated={(updated) => setCaseItem(updated)}
         />
       )}
 

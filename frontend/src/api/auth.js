@@ -15,6 +15,10 @@ export function updateJurisdiction(jurisdiction_location) {
   return apiClient.patch("/auth/me/jurisdiction", { jurisdiction_location });
 }
 
+export function updateAlertPreferences(payload) {
+  return apiClient.patch("/auth/me/alert-preferences", payload);
+}
+
 export function login({ email, password }) {
   return apiClient.post("/auth/login", { email, password });
 }
