@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
@@ -36,6 +36,37 @@ def _compute_photo_match_score(case: Case, sighting_photo_url: str | None) -> fl
         logger.exception("Face-match scoring failed for case %s", case.id)
         return None
     return result["score"]
+
+
+def get_reporter_stats_bulk(db: Session, reporter_ids: list) -> dict:
+    """Sighting accuracy history for a set of reporters in one query --
+    counts of their past sightings by outcome (verified / dismissed /
+    still pending), so an authority reviewing a new sighting can weigh it
+    against "this person's last 10 reports were all verified" vs "this
+    person's last 5 were all dismissed." Authority-facing only (see
+    SightingQueueItem, the only schema this is attached to) -- never shown
+    to the reporter themselves or the public, since a visible "credibility
+    score" would invite gaming it rather than reporting honestly.
+
+    Returns {reporter_id: {"verified": n, "dismissed": n, "pending": n, "total": n}}
+    for every id in reporter_ids, including zeroed entries for reporters
+    with no history yet -- callers shouldn't need a .get() with a default.
+    """
+    stats = {
+        rid: {"verified": 0, "dismissed": 0, "pending": 0, "total": 0} for rid in reporter_ids
+    }
+    if not reporter_ids:
+        return stats
+    stmt = (
+        select(Sighting.reported_by, Sighting.status, func.count())
+        .where(Sighting.reported_by.in_(reporter_ids))
+        .group_by(Sighting.reported_by, Sighting.status)
+    )
+    for reporter_id, sighting_status, count in db.execute(stmt):
+        entry = stats[reporter_id]
+        entry[sighting_status.value] = count
+        entry["total"] += count
+    return stats
 
 
 def list_pending_sightings(db: Session, limit: int = 50, offset: int = 0) -> list[Sighting]:

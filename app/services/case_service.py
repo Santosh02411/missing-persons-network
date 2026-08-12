@@ -489,6 +489,48 @@ def update_case_status(
     return case
 
 
+def reopen_case(db: Session, case: Case, reason: str, actor: User) -> Case:
+    """Reopens a resolved case -- for when a "found" person is confirmed
+    missing again, or a resolution turns out to have been mistaken. Only
+    from RESOLVED (not DISMISSED -- a dismissed case was rejected as
+    invalid/fake, a different situation from "we thought this was over";
+    re-filing is the right path there, not reopening). Restricted to
+    whoever has case access, and a reason is required (unlike dismiss's
+    optional one) since undoing a resolution is significant enough to
+    always want an explanation in the audit trail."""
+    if case.status != CaseStatus.RESOLVED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only a resolved case can be reopened.",
+        )
+    if not has_case_access(db, case, actor):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned authority, a collaborator on this case, or an admin can reopen it",
+        )
+
+    case.status = CaseStatus.OPEN
+    db.add(
+        AuditLog(
+            actor_id=actor.id,
+            action="case.reopened",
+            target_type="case",
+            target_id=case.id,
+            log_metadata={"from": "resolved", "to": "open", "reason": reason},
+        )
+    )
+    db.commit()
+    db.refresh(case)
+    bump_cases_list_version()
+    watch_service.notify_watchers(
+        db, case,
+        headline="This case has been reopened for further investigation.",
+        detail=reason,
+        exclude_user_id=actor.id,
+    )
+    return case
+
+
 def _load_case_photo(case: Case) -> tuple[str, bytes] | None:
     """(filename, bytes) for the case's photo, for use as an email
     attachment -- thin wrapper over upload_service.read_upload_bytes() that

@@ -23,7 +23,7 @@ pyotp==2.9.0
 # app/services/face_match_service.py for why classical CV (Haar cascade +
 # LBP histograms) was used instead of a deep embedding model.
 opencv-contrib-python-headless==4.10.0.84
-scikit-image==0.26.0
+scikit-image==0.25.2
 
 # Missing-person flyer PDF generation (app/services/flyer_service.py)
 reportlab==5.0.0

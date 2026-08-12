@@ -39,6 +39,9 @@ def _case_event_label(log: AuditLog) -> str:
     if log.action == "case.status_changed":
         to = str(meta.get("to", "")).replace("_", " ").title()
         return f"Status changed to {to}"
+    if log.action == "case.reopened":
+        reason = meta.get("reason")
+        return "Case reopened for further investigation" + (f" — {reason}" if reason else "")
     if log.action == "case.shared":
         return "Shared with another authority"
     if log.action == "case.collaborator_added":
