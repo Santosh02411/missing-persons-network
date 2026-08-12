@@ -60,6 +60,9 @@ class UserRead(BaseModel):
     phone_number: str | None = None
     org_name: str | None = None
     jurisdiction_location: GeoPoint | None = None
+    alerts_enabled: bool = False
+    alert_location: GeoPoint | None = None
+    alert_radius_km: float | None = None
 
     @field_validator("jurisdiction_location", mode="before")
     @classmethod
@@ -67,6 +70,15 @@ class UserRead(BaseModel):
         # Same WKBElement -> GeoPoint conversion CaseRead needs -- reading a
         # User back from the DB gives a raw geoalchemy2 WKBElement for this
         # column, not a {lat, lng} shape.
+        from app.services.geo_service import from_geography
+
+        if value is None or isinstance(value, dict):
+            return value
+        return from_geography(value)
+
+    @field_validator("alert_location", mode="before")
+    @classmethod
+    def _convert_alert_geography(cls, value):
         from app.services.geo_service import from_geography
 
         if value is None or isinstance(value, dict):

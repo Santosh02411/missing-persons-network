@@ -50,9 +50,20 @@ class SightingRead(BaseModel):
         return from_geography(value)
 
 
+class ReporterStats(BaseModel):
+    verified: int
+    dismissed: int
+    pending: int
+    total: int
+
+
 class SightingQueueItem(SightingRead):
     """SightingRead plus the parent case's name -- used only by the pending-
     review queue endpoint, so the authority dashboard doesn't need a second
     request per row just to show which case a sighting belongs to."""
 
     case_name: str
+    # The reporting user's sighting-accuracy history -- authority-facing
+    # only (this schema is never returned to a reporter or the public).
+    # None for anonymous/reporter-less sightings, which have no history to show.
+    reporter_stats: ReporterStats | None = None

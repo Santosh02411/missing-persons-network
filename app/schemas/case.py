@@ -85,6 +85,10 @@ class CaseStatusUpdate(BaseModel):
     status: CaseStatus
 
 
+class CaseReopenRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=1000)
+
+
 class CaseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
