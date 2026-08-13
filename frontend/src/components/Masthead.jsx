@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -8,10 +8,26 @@ const DASHBOARD_BY_ROLE = {
   admin: { to: "/dashboard/admin", label: "Admin" },
 };
 
+const ROLE_LABELS = {
+  reporter: "Citizen / public",
+  authority: "Authority",
+  admin: "Admin",
+};
+
+function initials(name) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0]?.[0] || "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (first + last).toUpperCase();
+}
+
 export default function Masthead() {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     function onScroll() {
@@ -21,7 +37,25 @@ export default function Masthead() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    function onClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    function onKeyDown(e) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
   async function handleLogout() {
+    setMenuOpen(false);
     await logout();
     navigate("/");
   }
@@ -55,15 +89,50 @@ export default function Masthead() {
               {user.role === "admin" && (
                 <Link to="/dashboard/authority">Authority queue</Link>
               )}
-              <Link to="/profile" className="masthead-user">
-                {user.full_name}
-              </Link>
-              <button onClick={handleLogout} style={{ background: "none", border: "none", cursor: "pointer" }}>
-                Log out
-              </button>
               <Link to="/cases/new" className="masthead-cta">
                 File a case
               </Link>
+
+              <div className="user-menu" ref={menuRef}>
+                <button
+                  type="button"
+                  className="user-menu-trigger"
+                  aria-expanded={menuOpen}
+                  aria-haspopup="true"
+                  onClick={() => setMenuOpen((v) => !v)}
+                >
+                  <span className="user-menu-avatar" aria-hidden="true">
+                    {initials(user.full_name)}
+                  </span>
+                  <span className="user-menu-name">{user.full_name}</span>
+                  <svg className="user-menu-caret" viewBox="0 0 12 8" fill="none" aria-hidden="true">
+                    <path d="M1 1.5l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+
+                {menuOpen && (
+                  <div className="user-menu-dropdown" role="menu">
+                    <div className="user-menu-header">
+                      <div className="user-menu-header-name">{user.full_name}</div>
+                      <div className="user-menu-header-role">{ROLE_LABELS[user.role] || user.role}</div>
+                    </div>
+                    <Link to="/profile" className="user-menu-item" role="menuitem" onClick={() => setMenuOpen(false)}>
+                      My profile
+                    </Link>
+                    <Link
+                      to="/account/security"
+                      className="user-menu-item"
+                      role="menuitem"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Security settings
+                    </Link>
+                    <button type="button" className="user-menu-item danger" role="menuitem" onClick={handleLogout}>
+                      Log out
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <>

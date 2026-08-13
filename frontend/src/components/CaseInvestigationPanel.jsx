@@ -175,9 +175,9 @@ export default function CaseInvestigationPanel({
   }
 
   return (
-    <div className="dashboard-card" style={{ marginTop: 24 }}>
-      <div className="section-heading" style={{ marginTop: 0 }}>
-        <h3 style={{ margin: 0, fontSize: "1.05rem" }}>Investigation (private)</h3>
+    <div className="dashboard-card mt-4">
+      <div className="card-subhead-row">
+        <h3 className="card-subhead">Investigation (private)</h3>
       </div>
       <p className="field-hint" style={{ marginTop: -8, marginBottom: 16 }}>
         Only visible to authorities and NGOs working this case — never to the reporter or
@@ -187,13 +187,12 @@ export default function CaseInvestigationPanel({
       {error && <div className="alert alert-error">{error}</div>}
 
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <strong style={{ fontSize: "0.9rem" }}>Collaborators</strong>
+        <div className="row-between" style={{ marginBottom: 8 }}>
+          <strong className="label-strong">Collaborators</strong>
           {canManageCollaborators && !isAddingCollaborator && (
             <button
               type="button"
-              className="btn btn-secondary"
-              style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+              className="btn btn-secondary btn-sm"
               onClick={() => setIsAddingCollaborator(true)}
             >
               + Add
@@ -205,12 +204,9 @@ export default function CaseInvestigationPanel({
           <p className="field-hint">No other authorities added yet.</p>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="stack-sm">
           {collaborators.map((c) => (
-            <div
-              key={c.user_id}
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.88rem" }}
-            >
+            <div key={c.user_id} className="row-between" style={{ fontSize: "0.88rem" }}>
               <span>
                 {c.org_name || c.full_name}
                 {c.org_name && <span className="field-hint"> — {c.full_name}</span>}
@@ -219,7 +215,8 @@ export default function CaseInvestigationPanel({
                 <button
                   type="button"
                   onClick={() => handleRemoveCollaborator(c.user_id)}
-                  style={{ background: "none", border: "none", color: "var(--color-rust)", cursor: "pointer", fontSize: "0.78rem" }}
+                  className="user-menu-item danger"
+                  style={{ width: "auto", padding: "2px 6px", fontSize: "0.78rem" }}
                 >
                   Remove
                 </button>
@@ -229,14 +226,14 @@ export default function CaseInvestigationPanel({
         </div>
 
         {isAddingCollaborator && (
-          <div style={{ marginTop: 10 }}>
+          <div className="mt-3">
             <input
               placeholder="Search station or NGO name…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               autoFocus
             />
-            <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+            <div className="stack-sm" style={{ marginTop: 6, gap: 4 }}>
               {isSearching && <p className="spinner-text">Searching…</p>}
               {!isSearching &&
                 results
@@ -255,8 +252,7 @@ export default function CaseInvestigationPanel({
             </div>
             <button
               type="button"
-              className="btn btn-secondary"
-              style={{ marginTop: 8, padding: "4px 10px", fontSize: "0.78rem" }}
+              className="btn btn-secondary btn-sm mt-3"
               onClick={() => setIsAddingCollaborator(false)}
             >
               Cancel
@@ -266,8 +262,8 @@ export default function CaseInvestigationPanel({
       </div>
 
       <div>
-        <strong style={{ fontSize: "0.9rem" }}>Investigation log</strong>
-        <form onSubmit={handleAddNote} style={{ marginTop: 8, marginBottom: 16 }}>
+        <strong className="label-strong">Investigation log</strong>
+        <form onSubmit={handleAddNote} className="mt-3" style={{ marginBottom: 16 }}>
           <textarea
             rows={2}
             placeholder="Add a note — a lead followed up, a call made, a decision made…"
@@ -276,8 +272,7 @@ export default function CaseInvestigationPanel({
           />
           <button
             type="submit"
-            className="btn btn-primary"
-            style={{ marginTop: 8, padding: "6px 14px", fontSize: "0.85rem" }}
+            className="btn btn-primary btn-sm mt-3"
             disabled={isPosting || !noteBody.trim()}
           >
             {isPosting ? "Adding…" : "Add note"}
@@ -291,7 +286,7 @@ export default function CaseInvestigationPanel({
             {notes.map((n) => (
               <div key={n.id} className="sighting-item">
                 <div className="sighting-item-header">
-                  <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{n.author_name}</span>
+                  <span className="label-strong">{n.author_name}</span>
                   <span className="sighting-item-meta">{new Date(n.created_at).toLocaleString()}</span>
                 </div>
                 <div style={{ whiteSpace: "pre-wrap" }}>{n.body}</div>
@@ -301,8 +296,8 @@ export default function CaseInvestigationPanel({
         )}
       </div>
 
-      <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--color-mist)" }}>
-        <strong style={{ fontSize: "0.9rem" }}>Age-progressed photo</strong>
+      <div className="divider-top">
+        <strong className="label-strong">Age-progressed photo</strong>
         <p className="field-hint" style={{ marginTop: 4, marginBottom: 10 }}>
           For cases open long enough that appearance has likely changed. Shown alongside the
           original photo on the case page, never replacing it.
@@ -320,8 +315,7 @@ export default function CaseInvestigationPanel({
           </div>
           <button
             type="submit"
-            className="btn btn-primary"
-            style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+            className="btn btn-primary btn-sm"
             disabled={isSavingAgeProgression || !ageProgressedUrl}
           >
             {isSavingAgeProgression ? "Saving…" : "Save age-progressed photo"}
@@ -330,8 +324,8 @@ export default function CaseInvestigationPanel({
       </div>
 
       {(caseStatus === "open" || caseStatus === "lead_found") && (
-        <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--color-mist)" }}>
-          <strong style={{ fontSize: "0.9rem" }}>Geofenced alert</strong>
+        <div className="divider-top">
+          <strong className="label-strong">Geofenced alert</strong>
           <p className="field-hint" style={{ marginTop: 4, marginBottom: 10 }}>
             Notify everyone who's opted in to alerts near this case's last-seen location — a
             community-scale, opt-in analog of an Amber Alert. Limited to once per case every 24
@@ -339,15 +333,14 @@ export default function CaseInvestigationPanel({
           </p>
           <button
             type="button"
-            className="btn btn-primary"
-            style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+            className="btn btn-primary btn-sm"
             onClick={handleSendAlert}
             disabled={isSendingAlert}
           >
             {isSendingAlert ? "Sending…" : "Send geofenced alert"}
           </button>
           {alertResult && (
-            <p className="field-hint" style={{ marginTop: 8 }}>
+            <p className="field-hint mt-3">
               Sent to {alertResult.notified_count} nearby subscriber
               {alertResult.notified_count === 1 ? "" : "s"}.
             </p>
@@ -356,16 +349,15 @@ export default function CaseInvestigationPanel({
       )}
 
       {caseStatus === "resolved" && (
-        <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--color-mist)" }}>
-          <strong style={{ fontSize: "0.9rem" }}>Reopen this case</strong>
+        <div className="divider-top">
+          <strong className="label-strong">Reopen this case</strong>
           <p className="field-hint" style={{ marginTop: 4, marginBottom: 10 }}>
             If the person has gone missing again, or this was resolved in error.
           </p>
           {!isReopening ? (
             <button
               type="button"
-              className="btn btn-danger"
-              style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+              className="btn btn-danger btn-sm"
               onClick={() => setIsReopening(true)}
             >
               Reopen case
@@ -383,19 +375,17 @@ export default function CaseInvestigationPanel({
                   onChange={(e) => setReopenReason(e.target.value)}
                 />
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="row">
                 <button
                   type="submit"
-                  className="btn btn-danger"
-                  style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+                  className="btn btn-danger btn-sm"
                   disabled={isSubmittingReopen || !reopenReason.trim()}
                 >
                   {isSubmittingReopen ? "Reopening…" : "Confirm reopen"}
                 </button>
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+                  className="btn btn-secondary btn-sm"
                   onClick={() => setIsReopening(false)}
                 >
                   Cancel

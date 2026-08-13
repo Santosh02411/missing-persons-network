@@ -66,169 +66,19 @@ export default function Profile() {
     }
   }
 
+  const twoFactorLabel = user.totp_enabled
+    ? "Enabled (authenticator app)"
+    : user.email_otp_enabled
+      ? "Enabled (email code)"
+      : user.sms_otp_enabled
+        ? "Enabled (SMS code)"
+        : "Not enabled";
+
   return (
-    <div className="container">
+    <div className="container" style={{ maxWidth: 720 }}>
       <div className="page-header">
         <h2 style={{ margin: 0 }}>My profile</h2>
-      </div>
-
-      <div className="form-card" style={{ maxWidth: 480 }}>
-        <div className="case-detail-label">Name</div>
-        <div>{user.full_name}</div>
-
-        <div className="case-detail-label">Email</div>
-        <div>
-          {user.email}{" "}
-          {user.email_verified ? (
-            <span className="status-badge status-verified">Verified</span>
-          ) : (
-            <span className="status-badge status-pending">Not verified</span>
-          )}
-        </div>
-
-        <div className="case-detail-label">Role</div>
-        <div>{ROLE_LABELS[user.role] || user.role}</div>
-
-        {user.role === "authority" && (
-          <>
-            <div className="case-detail-label">Organization</div>
-            <div>{user.org_name || "—"}</div>
-
-            <div className="case-detail-label">Account status</div>
-            <div>
-              {user.is_verified ? (
-                <span className="status-badge status-verified">Approved</span>
-              ) : (
-                <span className="status-badge status-pending">Awaiting admin approval</span>
-              )}
-            </div>
-
-            <div className="case-detail-label">Station / office location</div>
-            {!isEditingStation ? (
-              <div>
-                {user.jurisdiction_location ? (
-                  <>
-                    Set — {user.jurisdiction_location.lat.toFixed(4)},{" "}
-                    {user.jurisdiction_location.lng.toFixed(4)}{" "}
-                  </>
-                ) : (
-                  <span className="field-hint">
-                    Not set — cases won't auto-route to you until this is set.{" "}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ padding: "4px 10px", fontSize: "0.82rem" }}
-                  onClick={() => setIsEditingStation(true)}
-                >
-                  {user.jurisdiction_location ? "Update" : "Set location"}
-                </button>
-              </div>
-            ) : (
-              <div style={{ marginTop: 8 }}>
-                {saveError && <div className="alert alert-error">{saveError}</div>}
-                <LocationPicker value={stationLocation} onChange={setStationLocation} />
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={!stationLocation || isSaving}
-                    onClick={handleSaveStation}
-                  >
-                    {isSaving ? "Saving…" : "Save location"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setIsEditingStation(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        <div className="case-detail-label">Two-factor authentication</div>
-        <div>
-          {user.totp_enabled
-            ? "Enabled (authenticator app)"
-            : user.email_otp_enabled
-              ? "Enabled (email code)"
-              : user.sms_otp_enabled
-                ? "Enabled (SMS code)"
-                : "Not enabled"}
-        </div>
-
-        <div className="case-detail-label">Geofenced alerts</div>
-        {!isEditingAlerts ? (
-          <div>
-            {user.alerts_enabled ? (
-              <>
-                <span className="status-badge status-verified">On</span>{" "}
-                <span className="field-hint">
-                  within {user.alert_radius_km}km of your chosen location
-                </span>
-              </>
-            ) : (
-              <span className="field-hint">
-                Off — get emailed when an authority pushes an alert for a new case near a place
-                you choose.
-              </span>
-            )}{" "}
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ padding: "4px 10px", fontSize: "0.82rem", marginTop: 4 }}
-              onClick={() => setIsEditingAlerts(true)}
-            >
-              {user.alerts_enabled ? "Update" : "Turn on"}
-            </button>
-          </div>
-        ) : (
-          <div style={{ marginTop: 8 }}>
-            {alertError && <div className="alert alert-error">{alertError}</div>}
-            <LocationPicker value={alertLocation} onChange={setAlertLocation} />
-            <div className="field" style={{ marginTop: 8, maxWidth: 160 }}>
-              <label htmlFor="alert-radius">Radius (km)</label>
-              <input
-                id="alert-radius"
-                type="number"
-                min="1"
-                max="500"
-                value={alertRadius}
-                onChange={(e) => setAlertRadius(e.target.value)}
-              />
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={!alertLocation || isSavingAlerts}
-                onClick={() => handleSaveAlertPreferences(true)}
-              >
-                {isSavingAlerts ? "Saving…" : "Save and turn on"}
-              </button>
-              {user.alerts_enabled && (
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  disabled={isSavingAlerts}
-                  onClick={() => handleSaveAlertPreferences(false)}
-                >
-                  Turn off
-                </button>
-              )}
-              <button type="button" className="btn btn-secondary" onClick={() => setIsEditingAlerts(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="row">
           {dashboard && (
             <Link to={dashboard.to} className="btn btn-primary">
               {dashboard.label}
@@ -237,6 +87,189 @@ export default function Profile() {
           <Link to="/account/security" className="btn btn-secondary">
             Security settings
           </Link>
+        </div>
+      </div>
+
+      <div className="form-card" style={{ maxWidth: "none" }}>
+        {/* ---------- Account ---------- */}
+        <div className="detail-section">
+          <div className="detail-section-title">Account</div>
+          <div className="detail-list">
+            <div className="detail-row">
+              <div className="detail-row-label">Name</div>
+              <div className="detail-row-value">{user.full_name}</div>
+            </div>
+            <div className="detail-row">
+              <div className="detail-row-label">Email</div>
+              <div className="detail-row-value row">
+                {user.email}
+                {user.email_verified ? (
+                  <span className="status-badge status-verified">Verified</span>
+                ) : (
+                  <span className="status-badge status-pending">Not verified</span>
+                )}
+              </div>
+            </div>
+            <div className="detail-row">
+              <div className="detail-row-label">Role</div>
+              <div className="detail-row-value">{ROLE_LABELS[user.role] || user.role}</div>
+            </div>
+            <div className="detail-row">
+              <div className="detail-row-label">Two-factor authentication</div>
+              <div className="detail-row-value">{twoFactorLabel}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ---------- Authority details ---------- */}
+        {user.role === "authority" && (
+          <div className="detail-section">
+            <div className="detail-section-title">Authority details</div>
+            <div className="detail-list">
+              <div className="detail-row">
+                <div className="detail-row-label">Organization</div>
+                <div className="detail-row-value">{user.org_name || "—"}</div>
+              </div>
+              <div className="detail-row">
+                <div className="detail-row-label">Account status</div>
+                <div className="detail-row-value">
+                  {user.is_verified ? (
+                    <span className="status-badge status-verified">Approved</span>
+                  ) : (
+                    <span className="status-badge status-pending">Awaiting admin approval</span>
+                  )}
+                </div>
+              </div>
+              <div className="detail-row">
+                <div className="detail-row-label">Station / office location</div>
+                <div className="detail-row-value">
+                  {!isEditingStation ? (
+                    <div className="row-between">
+                      {user.jurisdiction_location ? (
+                        <span>
+                          Set — {user.jurisdiction_location.lat.toFixed(4)}, {user.jurisdiction_location.lng.toFixed(4)}
+                        </span>
+                      ) : (
+                        <span className="field-hint" style={{ marginTop: 0 }}>
+                          Not set — cases won't auto-route to you until this is set.
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setIsEditingStation(true)}
+                      >
+                        {user.jurisdiction_location ? "Update" : "Set location"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                {isEditingStation && (
+                  <div className="detail-row-edit stack-sm">
+                    {saveError && <div className="alert alert-error" style={{ marginBottom: 0 }}>{saveError}</div>}
+                    <LocationPicker value={stationLocation} onChange={setStationLocation} />
+                    <div className="row">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={!stationLocation || isSaving}
+                        onClick={handleSaveStation}
+                      >
+                        {isSaving ? "Saving…" : "Save location"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setIsEditingStation(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- Alerts ---------- */}
+        <div className="detail-section">
+          <div className="detail-section-title">Geofenced alerts</div>
+          <div className="detail-list">
+            <div className="detail-row">
+              <div className="detail-row-label">Alerts</div>
+              <div className="detail-row-value">
+                {!isEditingAlerts ? (
+                  <div className="row-between">
+                    {user.alerts_enabled ? (
+                      <span className="row">
+                        <span className="status-badge status-verified">On</span>
+                        <span className="field-hint" style={{ margin: 0 }}>
+                          within {user.alert_radius_km}km of your chosen location
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="field-hint" style={{ margin: 0 }}>
+                        Off — get emailed when an authority pushes an alert for a new case near a
+                        place you choose.
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setIsEditingAlerts(true)}
+                    >
+                      {user.alerts_enabled ? "Update" : "Turn on"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              {isEditingAlerts && (
+                <div className="detail-row-edit stack-sm">
+                  {alertError && <div className="alert alert-error" style={{ marginBottom: 0 }}>{alertError}</div>}
+                  <LocationPicker value={alertLocation} onChange={setAlertLocation} />
+                  <div className="field" style={{ marginBottom: 0, maxWidth: 160 }}>
+                    <label htmlFor="alert-radius">Radius (km)</label>
+                    <input
+                      id="alert-radius"
+                      type="number"
+                      min="1"
+                      max="500"
+                      value={alertRadius}
+                      onChange={(e) => setAlertRadius(e.target.value)}
+                    />
+                  </div>
+                  <div className="row">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={!alertLocation || isSavingAlerts}
+                      onClick={() => handleSaveAlertPreferences(true)}
+                    >
+                      {isSavingAlerts ? "Saving…" : "Save and turn on"}
+                    </button>
+                    {user.alerts_enabled && (
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        disabled={isSavingAlerts}
+                        onClick={() => handleSaveAlertPreferences(false)}
+                      >
+                        Turn off
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setIsEditingAlerts(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

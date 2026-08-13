@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import PasswordField from "../components/PasswordField";
+import AuthLayout from "../components/AuthLayout";
 
 export default function Login() {
   const { login, completeMfaLogin } = useAuth();
@@ -55,84 +56,89 @@ export default function Login() {
 
   if (mfaToken) {
     return (
-      <div className="container">
-        <div className="form-card">
-          <h2>Two-factor verification</h2>
-          <p className="field-hint" style={{ marginTop: -8, marginBottom: 20 }}>
-            {mfaMethod === "email_otp"
-              ? "We just emailed a 6-digit code to your registered address. Enter it below."
-              : mfaMethod === "sms_otp"
-              ? "We just texted a 6-digit code to your registered phone number. Enter it below."
-              : "Enter the 6-digit code from your authenticator app."}
-          </p>
-          {error && <div className="alert alert-error">{error}</div>}
-          <form onSubmit={handleMfaSubmit}>
-            <div className="field">
-              <label htmlFor="code">Authentication code</label>
-              <input
-                id="code"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                required
-                autoFocus
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-              />
-            </div>
-            <button className="btn btn-primary btn-block" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Verifying…" : "Verify and log in"}
-            </button>
-          </form>
-          <p className="field-hint" style={{ marginTop: "16px", textAlign: "center" }}>
-            <button
-              type="button"
-              onClick={() => { setMfaToken(null); setMfaMethod(null); }}
-              style={{ background: "none", border: "none", color: "var(--color-slate)", cursor: "pointer", textDecoration: "underline" }}
-            >
-              Back to login
-            </button>
-          </p>
-        </div>
-      </div>
+      <AuthLayout
+        eyebrow="National Missing Persons Registry"
+        title="One more step to keep your account safe."
+        body="Two-factor authentication protects the cases and sightings you're trusted with."
+      >
+        <h2>Two-factor verification</h2>
+        <p className="field-hint" style={{ marginTop: -8, marginBottom: 20 }}>
+          {mfaMethod === "email_otp"
+            ? "We just emailed a 6-digit code to your registered address. Enter it below."
+            : mfaMethod === "sms_otp"
+            ? "We just texted a 6-digit code to your registered phone number. Enter it below."
+            : "Enter the 6-digit code from your authenticator app."}
+        </p>
+        {error && <div className="alert alert-error">{error}</div>}
+        <form onSubmit={handleMfaSubmit}>
+          <div className="field">
+            <label htmlFor="code">Authentication code</label>
+            <input
+              id="code"
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              required
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+          </div>
+          <button className="btn btn-primary btn-block" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Verifying…" : "Verify and log in"}
+          </button>
+        </form>
+        <p className="field-hint" style={{ marginTop: "16px", textAlign: "center" }}>
+          <button
+            type="button"
+            onClick={() => { setMfaToken(null); setMfaMethod(null); }}
+            style={{ background: "none", border: "none", color: "var(--color-slate)", cursor: "pointer", textDecoration: "underline" }}
+          >
+            Back to login
+          </button>
+        </p>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="container">
-      <div className="form-card">
-        <h2>Log in</h2>
-        {error && <div className="alert alert-error">{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <div className="field">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </div>
-          <PasswordField
-            id="password"
-            label="Password"
+    <AuthLayout
+      eyebrow="National Missing Persons Registry"
+      title="A light kept on for every family still searching."
+      body="Log in to file a case, review sightings, or manage the cases assigned to your station."
+    >
+      <h2>Log in</h2>
+      {error && <div className="alert alert-error">{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <div className="field">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
             required
-            autoComplete="current-password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            autoComplete="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
-          <button className="btn btn-primary btn-block" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Logging in…" : "Log in"}
-          </button>
-        </form>
-        <p className="field-hint" style={{ marginTop: "12px", textAlign: "center" }}>
-          <Link to="/forgot-password">Forgot your password?</Link>
-        </p>
-        <p className="field-hint" style={{ marginTop: "8px", textAlign: "center" }}>
-          Don't have an account? <Link to="/register">Register</Link>
-        </p>
-      </div>
-    </div>
+        </div>
+        <PasswordField
+          id="password"
+          label="Password"
+          required
+          autoComplete="current-password"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+        />
+        <button className="btn btn-primary btn-block" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Logging in…" : "Log in"}
+        </button>
+      </form>
+      <p className="field-hint" style={{ marginTop: "12px", textAlign: "center" }}>
+        <Link to="/forgot-password">Forgot your password?</Link>
+      </p>
+      <p className="field-hint" style={{ marginTop: "8px", textAlign: "center" }}>
+        Don't have an account? <Link to="/register">Register</Link>
+      </p>
+    </AuthLayout>
   );
 }
