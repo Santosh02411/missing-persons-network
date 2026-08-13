@@ -17,7 +17,9 @@
 | Claim a case | ❌ | ✅ (if unclaimed) | ✅ |
 | Change case status | ❌ | ✅ (assigned cases only) | ✅ |
 | Submit sighting | ✅ | ✅ | ✅ |
-| Review/verify/dismiss sighting | ❌ | ✅ (any pending sighting) | ✅ |
+| Review/verify/dismiss sighting | ❌ | ✅ (cases they have access to) | ✅ |
+| Share case with another authority | ❌ | ✅ (assigned cases only) | ✅ |
+| Dismiss case | ❌ | ✅ (pending or assigned cases) | ✅ |
 | View audit logs | ❌ | own actions only | ✅ (all) |
 | Approve authority accounts | ❌ | ❌ | ✅ |
 
@@ -30,9 +32,14 @@
   `assigned_authority_id` (or admin), not just "some authority." Role
   dependencies answer "is this kind of action allowed for this role at all";
   service-layer checks answer "is it allowed on *this specific row*."
-- Sighting review is role-scoped only (any verified authority can review any
-  pending sighting) — deliberately not scoped to case assignment, since
-  sightings often need review before a case has even been claimed.
+- Sighting review is scoped to case access, same as case status changes: an
+  authority can only review a sighting on a case they're the assigned
+  authority for, or a collaborator on (`case_service.has_case_access`) — see
+  `sighting_service.review_sighting` and `list_pending_sightings`. A station
+  can't approve or dismiss sightings on a case routed to a different station.
+  A case with no assigned authority yet (unclaimed) stays open to any
+  verified authority, matching the same fallback used for unrouted cases at
+  approval time.
 
 ## Authority account verification
 

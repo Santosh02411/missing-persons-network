@@ -10,8 +10,9 @@ from app.core.config import settings
 from app.core.email import send_email
 from app.models.audit_log import AuditLog
 from app.models.case import Case
+from app.models.case_collaborator import CaseCollaborator
 from app.models.sighting import Sighting, SightingStatus
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.sighting import SightingCreate
 from app.services import case_service, face_match_service, watch_service
 from app.services.geo_service import to_geography
@@ -69,18 +70,36 @@ def get_reporter_stats_bulk(db: Session, reporter_ids: list) -> dict:
     return stats
 
 
-def list_pending_sightings(db: Session, limit: int = 50, offset: int = 0) -> list[Sighting]:
-    """Global pending-review queue -- backs the authority dashboard. Eager-
-    loads the parent case (joinedload) so the route can attach case_name to
-    each item without an extra query per row."""
+def list_pending_sightings(
+    db: Session, actor: User, limit: int = 50, offset: int = 0
+) -> list[Sighting]:
+    """Pending-review queue for the authority dashboard, scoped the same way
+    as case approval/status changes: a non-admin authority only sees
+    sightings on cases they have access to (the case's assigned authority,
+    or a collaborator on it) -- not every pending sighting nationwide.
+    Cases with no assigned authority yet (never claimed/approved) still show
+    up for every verified authority, matching the same fallback used for
+    unrouted cases in list_pending_approval_cases, so a sighting never sits
+    unreviewable just because its case hasn't been claimed. Admins see
+    everything, for oversight. Eager-loads the parent case (joinedload) so
+    the route can attach case_name to each item without an extra query per
+    row."""
     stmt = (
         select(Sighting)
+        .join(Case, Sighting.case_id == Case.id)
         .options(joinedload(Sighting.case))
         .where(Sighting.status == SightingStatus.PENDING)
-        .order_by(Sighting.created_at.desc())
-        .limit(limit)
-        .offset(offset)
     )
+    if actor.role != UserRole.ADMIN:
+        collaborator_case_ids = select(CaseCollaborator.case_id).where(
+            CaseCollaborator.user_id == actor.id
+        )
+        stmt = stmt.where(
+            (Case.assigned_authority_id == actor.id)
+            | (Case.assigned_authority_id.is_(None))
+            | (Case.id.in_(collaborator_case_ids))
+        )
+    stmt = stmt.order_by(Sighting.created_at.desc()).limit(limit).offset(offset)
     return list(db.scalars(stmt))
 
 
@@ -174,9 +193,21 @@ def review_sighting(
     db: Session, sighting: Sighting, new_status: SightingStatus, reviewer: User
 ) -> Sighting:
     # Role check (verified authority/admin) happens at the route level via
-    # require_verified_authority_or_admin. No row-level ownership constraint
-    # here by design -- any verified authority can review any pending sighting,
-    # unlike case status changes which are scoped to the assigned authority.
+    # require_verified_authority_or_admin. Row-level: only the case's
+    # assigned authority, a collaborator on that case, or an admin may
+    # review a sighting on it -- same rule as case status changes (see
+    # case_service.has_case_access) -- unless the case has no assigned
+    # authority yet, which stays open to any verified authority, matching
+    # the same fallback used for unrouted cases (see list_pending_sightings).
+    case = db.get(Case, sighting.case_id)
+    has_access = case is not None and (
+        case.assigned_authority_id is None or case_service.has_case_access(db, case, reviewer)
+    )
+    if not has_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned authority, a collaborator on this case, or an admin can review this sighting",
+        )
     if new_status == SightingStatus.PENDING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -199,12 +230,10 @@ def review_sighting(
     db.commit()
     db.refresh(sighting)
     if new_status == SightingStatus.VERIFIED:
-        case = db.get(Case, sighting.case_id)
-        if case is not None:
-            watch_service.notify_watchers(
-                db, case,
-                headline="A new sighting has been verified on this case.",
-                detail=f"Reported near: {sighting.address_text}",
-                exclude_user_id=reviewer.id,
-            )
+        watch_service.notify_watchers(
+            db, case,
+            headline="A new sighting has been verified on this case.",
+            detail=f"Reported near: {sighting.address_text}",
+            exclude_user_id=reviewer.id,
+        )
     return sighting

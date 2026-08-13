@@ -67,10 +67,10 @@ def get_pending_sightings(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_verified_authority_or_admin),
 ) -> list[SightingQueueItem]:
-    """Global pending-review queue for the authority dashboard. Not scoped to
-    "my assigned cases" -- matches the existing design that any verified
-    authority can review any pending sighting (see docs/SECURITY_AND_ACCESS.md)."""
-    sightings = sighting_service.list_pending_sightings(db, limit, offset)
+    """Pending-review queue for the authority dashboard -- scoped to cases
+    the current authority has access to (see sighting_service.list_pending_
+    sightings); admins see everything."""
+    sightings = sighting_service.list_pending_sightings(db, current_user, limit, offset)
     reporter_ids = [s.reported_by for s in sightings if s.reported_by is not None]
     stats_by_reporter = sighting_service.get_reporter_stats_bulk(db, reporter_ids)
     items = []

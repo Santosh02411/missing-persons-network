@@ -171,3 +171,38 @@ def test_pending_queue_excludes_already_reviewed_sightings(client, make_user, au
 
     response = client.get("/api/v1/sightings/pending", headers=auth_headers(authority))
     assert response.json() == []
+
+
+def test_sighting_review_and_queue_scoped_to_case_assignment(client, make_user, auth_headers):
+    """Once a case has been approved (and so has an assigned authority), a
+    *different* authority with no access to that case can no longer see its
+    sightings in their queue or review them -- matches case status changes."""
+    reporter = make_user(role=UserRole.REPORTER)
+    owning_authority = make_user(role=UserRole.AUTHORITY, is_verified=True)
+    other_authority = make_user(role=UserRole.AUTHORITY, is_verified=True)
+    case = _create_case(client, auth_headers(reporter))
+
+    approve = client.post(f"/api/v1/cases/{case['id']}/approve", headers=auth_headers(owning_authority))
+    assert approve.status_code == 200
+
+    sighting = client.post("/api/v1/sightings", json=_sighting_payload(case["id"])).json()
+
+    other_queue = client.get("/api/v1/sightings/pending", headers=auth_headers(other_authority))
+    assert other_queue.json() == []
+
+    owner_queue = client.get("/api/v1/sightings/pending", headers=auth_headers(owning_authority))
+    assert len(owner_queue.json()) == 1
+
+    forbidden_review = client.patch(
+        f"/api/v1/sightings/{sighting['id']}/review",
+        json={"status": "verified"},
+        headers=auth_headers(other_authority),
+    )
+    assert forbidden_review.status_code == 403
+
+    allowed_review = client.patch(
+        f"/api/v1/sightings/{sighting['id']}/review",
+        json={"status": "verified"},
+        headers=auth_headers(owning_authority),
+    )
+    assert allowed_review.status_code == 200
