@@ -29,6 +29,7 @@ LOGIN_OTP_PREFIX = "login_otp"  # a fresh code sent at each email-OTP login
 LOGIN_OTP_TTL_SECONDS = 5 * 60
 SETUP_OTP_PREFIX = "email_otp_setup"  # confirms the person can receive email before enabling
 SETUP_OTP_TTL_SECONDS = 10 * 60
+RESEND_COOLDOWN_PREFIX = "login_otp_resend_cooldown"
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
@@ -506,6 +507,32 @@ def verify_login_otp(user_id, code: str) -> bool:
         return False
     redis_client.delete(key)  # single use
     return True
+
+
+RESEND_COOLDOWN_SECONDS = 30
+
+
+def resend_login_otp(user: User) -> None:
+    """Re-sends the login code for an email_otp/sms_otp account -- used by
+    the "Resend code" link on the 2FA login screen when the first code
+    didn't arrive or expired. A short per-user cooldown (Redis SETNX-style)
+    stops someone from spamming the resend button into a flood of emails/SMS;
+    it does NOT reset the code's own TTL further than a fresh send_login_otp/
+    send_login_sms_otp call already does. Not applicable to TOTP -- an
+    authenticator app's code isn't something the server sends, it's raised
+    as a 400 by the route before this is ever called."""
+    cooldown_key = f"{RESEND_COOLDOWN_PREFIX}:{user.id}"
+    if not redis_client.set(cooldown_key, "1", ex=RESEND_COOLDOWN_SECONDS, nx=True):
+        ttl = redis_client.ttl(cooldown_key)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Please wait a bit before requesting another code.",
+            headers={"Retry-After": str(ttl if ttl and ttl > 0 else RESEND_COOLDOWN_SECONDS)},
+        )
+    if user.email_otp_enabled:
+        send_login_otp(user)
+    elif user.sms_otp_enabled:
+        send_login_sms_otp(user)
 
 
 # ---------------------------------------------------------------------------

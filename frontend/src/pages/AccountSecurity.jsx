@@ -332,6 +332,17 @@ export default function AccountSecurity() {
                 Confirm and enable
               </button>
             </form>
+            <p className="field-hint" style={{ marginTop: 10 }}>
+              Didn't get it?{" "}
+              <button
+                type="button"
+                onClick={handleStartEmailOtpSetup}
+                disabled={busy}
+                style={{ background: "none", border: "none", color: "var(--color-slate)", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+              >
+                Resend code
+              </button>
+            </p>
             <button
               className="btn btn-secondary"
               style={{ marginTop: 8 }}
@@ -362,6 +373,17 @@ export default function AccountSecurity() {
                 Confirm and enable
               </button>
             </form>
+            <p className="field-hint" style={{ marginTop: 10 }}>
+              Didn't get it?{" "}
+              <button
+                type="button"
+                onClick={() => handleStartSmsOtpSetup({ preventDefault() {} })}
+                disabled={busy}
+                style={{ background: "none", border: "none", color: "var(--color-slate)", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+              >
+                Resend code
+              </button>
+            </p>
             <button
               className="btn btn-secondary"
               style={{ marginTop: 8 }}

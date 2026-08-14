@@ -84,6 +84,72 @@ def test_cannot_enable_sms_otp_and_totp_together(client, make_user, auth_headers
     assert response.status_code == 409
 
 
+def test_resend_2fa_code_sends_a_fresh_email_otp(client, make_user, auth_headers):
+    authority = make_user(role=UserRole.AUTHORITY, is_verified=True)
+    headers = auth_headers(authority)
+
+    with patch("app.services.auth_service.send_email") as mock_email:
+        client.post("/api/v1/auth/2fa/email-otp/setup", headers=headers)
+        first_code = mock_email.call_args.kwargs["body"].split(": ")[1].split("\n")[0].strip()
+    client.post("/api/v1/auth/2fa/email-otp/verify", json={"code": first_code}, headers=headers)
+
+    login_body = client.post(
+        "/api/v1/auth/login", json={"email": authority.email, "password": "testpassword123"}
+    ).json()
+
+    with patch("app.services.auth_service.send_email") as mock_email:
+        resend = client.post("/api/v1/auth/2fa/resend", json={"mfa_token": login_body["mfa_token"]})
+        assert resend.status_code == 204
+        resent_code = mock_email.call_args.kwargs["body"].split(": ")[1].split("\n")[0].strip()
+
+    complete = client.post(
+        "/api/v1/auth/2fa/login", json={"mfa_token": login_body["mfa_token"], "code": resent_code}
+    )
+    assert complete.status_code == 200
+
+
+def test_resend_2fa_code_is_rate_limited(client, make_user, auth_headers):
+    authority = make_user(role=UserRole.AUTHORITY, is_verified=True)
+    headers = auth_headers(authority)
+
+    with patch("app.services.auth_service.send_email") as mock_email:
+        client.post("/api/v1/auth/2fa/email-otp/setup", headers=headers)
+        first_code = mock_email.call_args.kwargs["body"].split(": ")[1].split("\n")[0].strip()
+    client.post("/api/v1/auth/2fa/email-otp/verify", json={"code": first_code}, headers=headers)
+
+    login_body = client.post(
+        "/api/v1/auth/login", json={"email": authority.email, "password": "testpassword123"}
+    ).json()
+
+    with patch("app.services.auth_service.send_email"):
+        first_resend = client.post(
+            "/api/v1/auth/2fa/resend", json={"mfa_token": login_body["mfa_token"]}
+        )
+        assert first_resend.status_code == 204
+
+        second_resend = client.post(
+            "/api/v1/auth/2fa/resend", json={"mfa_token": login_body["mfa_token"]}
+        )
+        assert second_resend.status_code == 429
+        assert "Retry-After" in second_resend.headers
+
+
+def test_resend_2fa_code_rejected_for_totp_accounts(client, make_user, auth_headers):
+    import pyotp
+
+    authority = make_user(role=UserRole.AUTHORITY, is_verified=True)
+    headers = auth_headers(authority)
+    secret = client.post("/api/v1/auth/2fa/setup", headers=headers).json()["secret"]
+    client.post("/api/v1/auth/2fa/verify", json={"code": pyotp.TOTP(secret).now()}, headers=headers)
+
+    login_body = client.post(
+        "/api/v1/auth/login", json={"email": authority.email, "password": "testpassword123"}
+    ).json()
+
+    response = client.post("/api/v1/auth/2fa/resend", json={"mfa_token": login_body["mfa_token"]})
+    assert response.status_code == 400
+
+
 def test_sms_otp_disable(client, make_user, auth_headers):
     authority = make_user(role=UserRole.AUTHORITY, is_verified=True)
     headers = auth_headers(authority)

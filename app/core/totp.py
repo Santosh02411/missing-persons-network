@@ -14,8 +14,11 @@ def get_provisioning_uri(secret: str, account_email: str) -> str:
 
 
 def verify_totp_code(secret: str, code: str) -> bool:
-    """valid_window=2 tolerates codes from up to 2 time-steps (60 seconds)
+    """valid_window=4 tolerates codes from up to 4 time-steps (120 seconds)
     before/after the current one, to absorb clock drift between the server
-    (often more noticeable in Docker Desktop on Windows after sleep/resume)
-    and the phone's authenticator app."""
-    return pyotp.totp.TOTP(secret).verify(code, valid_window=2)
+    and the phone's authenticator app -- the single most common cause of
+    "I scanned the QR code but the code is always rejected" reports, since
+    TOTP codes are time-based and a server clock even a couple minutes off
+    invalidates every code. If codes still fail at this window, the server's
+    system clock is very likely wrong -- check it before assuming a bug."""
+    return pyotp.totp.TOTP(secret).verify(code, valid_window=4)

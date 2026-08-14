@@ -1,13 +1,27 @@
+# --- Environment / secrets ---
+.env
+.env.local
+
+# --- Python ---
+venv/
 __pycache__/
 *.pyc
-.env
-.venv/
-venv/
-*.egg-info/
 .pytest_cache/
-node_modules/
-dist/
+.ruff_cache/
+*.egg-info/
+htmlcov/
+.coverage
+
+# --- Uploads (user-submitted photos — never commit real data) ---
+uploads/
+
+# --- Node / frontend ---
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# --- Editor / OS ---
+.vscode/
+.idea/
 .DS_Store
-*.log
-uploads/*
-!uploads/.gitkeep
+Thumbs.db

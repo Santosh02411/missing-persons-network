@@ -16,6 +16,7 @@ from app.schemas.token import (
     EmailVerifyRequest,
     ForgotPasswordRequest,
     LoginResult,
+    MfaResendRequest,
     RefreshRequest,
     ResetPasswordRequest,
     SessionRead,
@@ -41,6 +42,7 @@ from app.services.auth_service import (
     list_sessions,
     register_user,
     request_password_reset,
+    resend_login_otp,
     reset_password,
     revoke_all_sessions,
     revoke_session,
@@ -158,6 +160,38 @@ def login_with_2fa(
 
     user_agent = request.headers.get("user-agent")
     return _issue_tokens_new_session(user.id, user_agent)
+
+
+@router.post("/2fa/resend", status_code=status.HTTP_204_NO_CONTENT)
+def resend_2fa_code(payload: MfaResendRequest, db: Session = Depends(get_db)) -> None:
+    """Re-sends the login code for an email_otp/sms_otp account, using the
+    same mfa_token issued by /auth/login -- for when the first code didn't
+    arrive, expired (5 min TTL), or landed in spam. Not applicable to TOTP
+    accounts (there's nothing for the server to send; the code comes from
+    the person's own authenticator app), which 400s here rather than
+    silently no-op-ing. Rate-limited per user (see
+    auth_service.resend_login_otp) so the resend link can't be used to
+    flood someone's inbox/phone."""
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired login session. Please try logging in again.",
+    )
+    try:
+        user_id = decode_token(payload.mfa_token, expected_type="mfa")
+    except InvalidTokenError as exc:
+        raise invalid from exc
+
+    user = db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise invalid
+    if user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Authenticator-app codes refresh on their own -- open your app for the current code.",
+        )
+    if not (user.email_otp_enabled or user.sms_otp_enabled):
+        raise invalid
+    resend_login_otp(user)
 
 
 @router.post("/refresh", response_model=Token)

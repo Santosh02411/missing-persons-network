@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { extractErrorMessage } from "../api/client";
+import { resendMfaCode } from "../api/auth";
 import { useAuth } from "../context/AuthContext";
 import PasswordField from "../components/PasswordField";
 import AuthLayout from "../components/AuthLayout";
@@ -18,8 +19,32 @@ export default function Login() {
   const [mfaToken, setMfaToken] = useState(null);
   const [mfaMethod, setMfaMethod] = useState(null); // "totp" | "email_otp"
   const [code, setCode] = useState("");
+  const [resendState, setResendState] = useState("idle"); // "idle" | "sending" | "sent"
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const from = location.state?.from?.pathname || "/";
+
+  async function handleResend() {
+    setError(null);
+    setResendState("sending");
+    try {
+      await resendMfaCode(mfaToken);
+      setResendState("sent");
+      setResendCooldown(30);
+      const timer = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err) {
+      setResendState("idle");
+      setError(extractErrorMessage(err, "Couldn't resend the code. Please wait a moment and try again."));
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -88,7 +113,31 @@ export default function Login() {
             {isSubmitting ? "Verifying…" : "Verify and log in"}
           </button>
         </form>
-        <p className="field-hint" style={{ marginTop: "16px", textAlign: "center" }}>
+        {(mfaMethod === "email_otp" || mfaMethod === "sms_otp") && (
+          <p className="field-hint" style={{ marginTop: "16px", textAlign: "center" }}>
+            Didn't get a code?{" "}
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendState === "sending" || resendCooldown > 0}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--color-slate)",
+                cursor: resendCooldown > 0 ? "default" : "pointer",
+                textDecoration: resendCooldown > 0 ? "none" : "underline",
+                padding: 0,
+              }}
+            >
+              {resendState === "sending"
+                ? "Sending…"
+                : resendCooldown > 0
+                ? `Resend code (${resendCooldown}s)`
+                : "Resend code"}
+            </button>
+          </p>
+        )}
+        <p className="field-hint" style={{ marginTop: "8px", textAlign: "center" }}>
           <button
             type="button"
             onClick={() => { setMfaToken(null); setMfaMethod(null); }}

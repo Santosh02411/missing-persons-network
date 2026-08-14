@@ -69,6 +69,10 @@ class TwoFactorLoginRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6)
 
 
+class MfaResendRequest(BaseModel):
+    mfa_token: str
+
+
 class SmsOtpSetupRequest(BaseModel):
     phone_number: str = Field(min_length=8, max_length=32)
 

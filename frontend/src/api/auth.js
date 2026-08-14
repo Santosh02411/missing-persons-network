@@ -51,6 +51,10 @@ export function loginWith2FA(mfa_token, code) {
   return apiClient.post("/auth/2fa/login", { mfa_token, code });
 }
 
+export function resendMfaCode(mfa_token) {
+  return apiClient.post("/auth/2fa/resend", { mfa_token });
+}
+
 export function setup2FA() {
   return apiClient.post("/auth/2fa/setup");
 }

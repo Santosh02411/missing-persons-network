@@ -159,11 +159,9 @@ docker compose exec api alembic upgrade head
 ```
 
 Check it's alive:
-
 ```bash
 curl http://localhost:8000/health
 ```
-
 A healthy response is HTTP 200, `{"status": "ok", "database": "connected", ...}`.
 HTTP 503 / `"database": "unreachable"` almost always means `DATABASE_URL` in
 `.env` has the wrong hostname for this context — see the networking note below.
@@ -217,45 +215,48 @@ Frontend dev server runs on `http://localhost:5173`.
   itself, not your machine.
 - Your browser/terminal on your actual machine reaches containers via
   `localhost` + the **published port** (`localhost:8000`, `localhost:5432`).
-- `.env`'s `DATABASE_URL`/`REDIS_URL` are read by code running _inside_ the
+- `.env`'s `DATABASE_URL`/`REDIS_URL` are read by code running *inside* the
   `api` container, so under Docker they must say `db`/`redis`, not
   `localhost`. If you're running the API natively (Option B above), the
   opposite is true — use `localhost` there instead.
 
-| From...                        | Reach Postgres via | Reach Redis via  | Reach the API via |
-| ------------------------------ | ------------------ | ---------------- | ----------------- |
-| Another container (e.g. `api`) | `db:5432`          | `redis:6379`     | `api:8000`        |
-| Your machine / browser         | `localhost:5432`   | `localhost:6379` | `localhost:8000`  |
+| From... | Reach Postgres via | Reach Redis via | Reach the API via |
+|---|---|---|---|
+| Another container (e.g. `api`) | `db:5432` | `redis:6379` | `api:8000` |
+| Your machine / browser | `localhost:5432` | `localhost:6379` | `localhost:8000` |
 
 ---
 
 ## Environment variables (backend)
 
-All read from `.env` via `app/core/config.py`. See `.env.example` for full
-inline comments and setup walkthroughs (Gmail App Password, Twilio, etc.).
+All read from `.env` via `app/core/config.py`. `.env.example` only lists the
+ones worth setting explicitly (the required ones, plus the ones you're most
+likely to want to change) — every variable below has a working default in
+code, so anything not in `.env.example` can simply be added here if you ever
+need to override it.
 
-| Variable                                                                                           | Default                     | Notes                                                                                                            |
-| -------------------------------------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                                                                     | _(required)_                | `db` for Docker, `localhost` for native                                                                          |
-| `TEST_DATABASE_URL`                                                                                | _(optional)_                | Separate DB used only by the pytest suite                                                                        |
-| `REDIS_URL`                                                                                        | `redis://localhost:6379/0`  | `redis` for Docker                                                                                               |
-| `SECRET_KEY`                                                                                       | _(required)_                | Long random string, signs JWTs — generate your own                                                               |
-| `ALGORITHM`                                                                                        | `HS256`                     | JWT signing algorithm                                                                                            |
-| `ACCESS_TOKEN_EXPIRE_MINUTES`                                                                      | `60`                        |                                                                                                                  |
-| `REFRESH_TOKEN_EXPIRE_DAYS`                                                                        | `7`                         |                                                                                                                  |
-| `ENVIRONMENT`                                                                                      | `development`               | `production` suppresses tracebacks in error responses                                                            |
-| `CORS_ORIGINS`                                                                                     | `["http://localhost:5173"]` | JSON array                                                                                                       |
-| `SIGHTING_REPORT_RATE_LIMIT`                                                                       | `5/minute`                  | Per-user                                                                                                         |
-| `FRONTEND_URL`                                                                                     | `http://localhost:5173`     | Used to build links in emails                                                                                    |
-| `EMAIL_BACKEND`                                                                                    | `console`                   | `console` logs emails instead of sending; set `smtp` for real delivery                                           |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM_EMAIL` / `SMTP_USE_TLS` | —                           | Only used when `EMAIL_BACKEND=smtp`                                                                              |
-| `SMTP_SENDING_DOMAIN`                                                                              | _(empty)_                   | Optional, only for providers with domain-level DKIM (SendGrid/Postmark/SES/Mailgun) — leave blank for Gmail SMTP |
-| `SMS_BACKEND`                                                                                      | `console`                   | `console` logs the 2FA code instead of texting; set `twilio` for real SMS                                        |
-| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER`                                  | —                           | Only used when `SMS_BACKEND=twilio`                                                                              |
-| `UPLOAD_DIR`                                                                                       | `uploads`                   | Where photos are stored, served at `/media`                                                                      |
-| `MAX_UPLOAD_BYTES`                                                                                 | `5242880` (5MB)             |                                                                                                                  |
-| `LOGIN_FAILURE_THRESHOLD` / `LOGIN_FAILURE_WINDOW_SECONDS` / `LOGIN_LOCKOUT_SECONDS`               | `5` / `900` / `900`         | Login lockout after repeated failures                                                                            |
-| `EMERGENCY_CONTACTS`                                                                               | India-wide defaults         | JSON array, override for a different region                                                                      |
+| Variable | Default | Notes |
+|---|---|---|
+| `DATABASE_URL` | *(required)* | `db` for Docker, `localhost` for native |
+| `TEST_DATABASE_URL` | *(optional)* | Separate DB used only by the pytest suite |
+| `REDIS_URL` | `redis://localhost:6379/0` | `redis` for Docker |
+| `SECRET_KEY` | *(required)* | Long random string, signs JWTs — generate your own |
+| `ALGORITHM` | `HS256` | JWT signing algorithm |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | |
+| `ENVIRONMENT` | `development` | `production` suppresses tracebacks in error responses |
+| `CORS_ORIGINS` | `["http://localhost:5173"]` | JSON array |
+| `SIGHTING_REPORT_RATE_LIMIT` | `5/minute` | Per-user |
+| `FRONTEND_URL` | `http://localhost:5173` | Used to build links in emails |
+| `EMAIL_BACKEND` | `console` | `console` logs emails instead of sending; set `smtp` for real delivery |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM_EMAIL` / `SMTP_USE_TLS` | — | Only used when `EMAIL_BACKEND=smtp` |
+| `SMTP_SENDING_DOMAIN` | *(empty)* | Optional, only for providers with domain-level DKIM (SendGrid/Postmark/SES/Mailgun) — leave blank for Gmail SMTP |
+| `SMS_BACKEND` | `console` | `console` logs the 2FA code instead of texting; set `twilio` for real SMS |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | — | Only used when `SMS_BACKEND=twilio` |
+| `UPLOAD_DIR` | `uploads` | Where photos are stored, served at `/media` |
+| `MAX_UPLOAD_BYTES` | `5242880` (5MB) | |
+| `LOGIN_FAILURE_THRESHOLD` / `LOGIN_FAILURE_WINDOW_SECONDS` / `LOGIN_LOCKOUT_SECONDS` | `5` / `900` / `900` | Login lockout after repeated failures |
+| `EMERGENCY_CONTACTS` | India-wide defaults | JSON array, override for a different region |
 
 **Frontend** (`frontend/.env`): `VITE_API_BASE_URL` (default
 `http://localhost:8000/api/v1`).
@@ -273,7 +274,6 @@ alembic upgrade head
 ```
 
 To generate a new migration after changing a model:
-
 ```bash
 alembic revision --autogenerate -m "describe the change"
 # review the generated file in alembic/versions/ before applying
@@ -301,26 +301,22 @@ pytest --cov=app --cov-report=term-missing
 
 > **First time only:** the test database (`mpn_test_db`) needs to exist with
 > the PostGIS extension enabled. Under Docker, `scripts/init-test-db.sql`
-> creates it automatically on a _fresh_ Postgres data volume. If that volume
+> creates it automatically on a *fresh* Postgres data volume. If that volume
 > already has data, run manually:
->
 > ```bash
 > docker compose exec db psql -U mpn_user -d mpn_db -c "CREATE DATABASE mpn_test_db;"
 > docker compose exec db psql -U mpn_user -d mpn_test_db -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 > ```
->
 > (Native: run the equivalent `psql`/`createdb` commands directly against
 > your local Postgres.)
 
 Lint:
-
 ```bash
 pip install -r requirements-dev.txt
 ruff check app
 ```
 
 Frontend lint:
-
 ```bash
 cd frontend
 npm run lint
@@ -345,20 +341,20 @@ leak tracebacks.
 
 ## Access control summary
 
-Full details, including the row-level "who can act on _this specific case_"
+Full details, including the row-level "who can act on *this specific case*"
 rules, are in `docs/SECURITY_AND_ACCESS.md`. Short version:
 
-| Action                            |     Reporter     |               Authority (verified)               | Admin |
-| --------------------------------- | :--------------: | :----------------------------------------------: | :---: |
-| Create case                       |     ✅ (own)     |                        ✅                        |  ✅   |
-| Edit case                         |     ✅ (own)     |                  ✅ (assigned)                   |  ✅   |
-| Approve / dismiss case            |        ❌        | ✅ (station it was routed to, or unrouted cases) |  ✅   |
-| Claim a case                      |        ❌        |                ✅ (if unclaimed)                 |  ✅   |
-| Change case status                |        ❌        |             ✅ (assigned cases only)             |  ✅   |
-| Share case with another authority |        ❌        |             ✅ (assigned cases only)             |  ✅   |
-| Submit sighting                   | ✅ (+ anonymous) |                        ✅                        |  ✅   |
-| Review sighting                   |        ❌        |          ✅ (cases they have access to)          |  ✅   |
-| Approve authority accounts        |        ❌        |                        ❌                        |  ✅   |
+| Action | Reporter | Authority (verified) | Admin |
+|---|:---:|:---:|:---:|
+| Create case | ✅ (own) | ✅ | ✅ |
+| Edit case | ✅ (own) | ✅ (assigned) | ✅ |
+| Approve / dismiss case | ❌ | ✅ (station it was routed to, or unrouted cases) | ✅ |
+| Claim a case | ❌ | ✅ (if unclaimed) | ✅ |
+| Change case status | ❌ | ✅ (assigned cases only) | ✅ |
+| Share case with another authority | ❌ | ✅ (assigned cases only) | ✅ |
+| Submit sighting | ✅ (+ anonymous) | ✅ | ✅ |
+| Review sighting | ❌ | ✅ (cases they have access to) | ✅ |
+| Approve authority accounts | ❌ | ❌ | ✅ |
 
 Authority accounts require admin approval (`is_verified`) before they can
 review sightings, approve/dismiss cases, or change case status — self-
