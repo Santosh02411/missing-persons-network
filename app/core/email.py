@@ -117,6 +117,68 @@ def _send_smtp(
         logger.exception("Failed to send email to %s via SMTP", to)
 
 
+def _send_resend(
+    to: str,
+    subject: str,
+    body: str,
+    attachments: list[tuple[str, bytes]] | None = None,
+    from_display_name: str | None = None,
+    reply_to: str | None = None,
+    from_email: str | None = None,
+) -> None:
+    """Sends via Resend's HTTPS API (https://resend.com/docs/api-reference/emails/send-email)
+    instead of a raw SMTP socket -- this is ordinary HTTPS traffic, so it
+    works on hosts that block outbound SMTP (Render's free tier included;
+    see _send_smtp's docstring). Free tier: 3,000 emails/month, no card
+    required. Same "log, don't raise" failure handling as _send_smtp -- a
+    broken email provider shouldn't crash registration or password reset.
+
+    from_email is only honored if it's on a domain verified in Resend --
+    otherwise Resend rejects the send outright (unlike Gmail SMTP, which
+    silently ignores it and falls back to the authenticated mailbox), so an
+    unverified from_email here surfaces as a clear "Failed to send" log
+    rather than a silent substitution.
+    """
+    import base64
+
+    import httpx
+
+    if not settings.RESEND_API_KEY or not settings.RESEND_FROM_EMAIL:
+        logger.error(
+            "EMAIL_BACKEND=resend but RESEND_API_KEY/RESEND_FROM_EMAIL aren't set -- "
+            "falling back to console. Fill in the RESEND_* settings in .env."
+        )
+        _send_console(to, subject, body, attachments, from_display_name, reply_to)
+        return
+
+    sender = from_email or settings.RESEND_FROM_EMAIL
+    payload: dict = {
+        "from": f"{from_display_name} <{sender}>" if from_display_name else sender,
+        "to": [to],
+        "subject": subject,
+        "text": body,
+    }
+    if reply_to:
+        payload["reply_to"] = reply_to
+    if attachments:
+        payload["attachments"] = [
+            {"filename": filename, "content": base64.b64encode(content).decode("ascii")}
+            for filename, content in attachments
+        ]
+
+    try:
+        response = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
+            json=payload,
+            timeout=10,
+        )
+        response.raise_for_status()
+        logger.info("Sent email to %s: %s", to, subject)
+    except Exception:
+        logger.exception("Failed to send email to %s via Resend", to)
+
+
 def sender_address_for(local_part: str) -> str | None:
     """Builds a per-sender address under SMTP_SENDING_DOMAIN, e.g.
     sender_address_for("belagavi-city-police-4f3a") ->
@@ -153,5 +215,7 @@ def send_email(
     """
     if settings.EMAIL_BACKEND == "smtp":
         _send_smtp(to, subject, body, attachments, from_display_name, reply_to, from_email)
+    elif settings.EMAIL_BACKEND == "resend":
+        _send_resend(to, subject, body, attachments, from_display_name, reply_to, from_email)
     else:
         _send_console(to, subject, body, attachments, from_display_name, reply_to)

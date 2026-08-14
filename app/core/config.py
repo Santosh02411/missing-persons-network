@@ -68,9 +68,13 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
 
     # Email sending. "console" (default) just logs emails -- no setup needed,
-    # safe for anyone cloning this project. Switch to "smtp" and fill in the
-    # SMTP_* settings to actually send real emails (see .env.example for a
-    # Gmail App Password walkthrough).
+    # safe for anyone cloning this project. "smtp" sends real email via a
+    # raw SMTP connection -- works locally/on a VM, but many free PaaS hosts
+    # (Render's free tier included) block outbound SMTP entirely, so this
+    # will silently fail there (see _send_smtp's error handling). "resend"
+    # sends via Resend's HTTPS API instead of a raw socket -- ordinary web
+    # traffic, so it works on hosts that block SMTP. Free forever, no card
+    # needed: https://resend.com.
     EMAIL_BACKEND: str = "console"
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
@@ -79,17 +83,27 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = ""
     SMTP_USE_TLS: bool = True
 
+    # Only used when EMAIL_BACKEND="resend". RESEND_FROM_EMAIL must be an
+    # address on a domain you've verified in Resend -- their sandbox/testing
+    # domain (onboarding@resend.dev) only delivers to your own Resend
+    # account's email, not real users, so a verified domain is required for
+    # anyone else to actually receive mail.
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = ""
+
     # Optional: lets case_service.share_case send each shared case from a
     # per-authority address under YOUR OWN verified domain, e.g.
     # "belagavi-city-police-4f3a@mail.reunificationnetwork.org" instead of
-    # every share coming from the single SMTP_FROM_EMAIL address. This ONLY
-    # works with an email provider that does domain-level DKIM signing
-    # (SendGrid, Postmark, AWS SES, Mailgun, etc. with the domain verified)
-    # -- NOT with Gmail SMTP + an App Password, which only lets you send as
-    # the one authenticated mailbox (or an explicitly-verified "Send As"
-    # alias in that account) and will reject or rewrite anything else.
-    # Leave blank to keep using SMTP_FROM_EMAIL for everything (the default,
-    # and the only option that works with plain Gmail SMTP).
+    # every share coming from the single SMTP_FROM_EMAIL/RESEND_FROM_EMAIL
+    # address. This ONLY works with an email provider that does domain-level
+    # DKIM signing on a domain you've verified there (SendGrid, Postmark,
+    # AWS SES, Resend, Mailgun, etc.) -- NOT with Gmail SMTP + an App
+    # Password, which only lets you send as the one authenticated mailbox
+    # (or an explicitly-verified "Send As" alias in that account) and will
+    # reject or rewrite anything else.
+    # Leave blank to keep using SMTP_FROM_EMAIL/RESEND_FROM_EMAIL for
+    # everything (the default, and the only option that works with plain
+    # Gmail SMTP).
     SMTP_SENDING_DOMAIN: str = ""
 
     # SMS sending, for SMS-based two-factor auth (app/core/sms.py). "console"
